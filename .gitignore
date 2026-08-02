@@ -32,3 +32,6 @@ build/
 *.sqlite3
 .DS_Store
 *.log
+web/.playwright-artifacts/
+web/playwright-report/
+web/test-results/

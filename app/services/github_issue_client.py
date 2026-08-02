@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from app.services.github_provider_error import safe_github_response_detail
+
 GITHUB_API_BASE_URL = "https://api.github.com"
 
 
@@ -88,6 +90,7 @@ async def list_issues(
     state: str = "all",
     per_page: int = 100,
     max_pages: int = 10,
+    client: httpx.AsyncClient | None = None,
 ) -> list[dict[str, Any]]:
     if state not in {"open", "closed", "all"}:
         raise GitHubIssueClientError("github issue read request failed: invalid state")
@@ -103,50 +106,49 @@ async def list_issues(
         "User-Agent": "founderOS",
     }
     issues: list[dict[str, Any]] = []
+    owns_client = client is None
+    http_client = client or httpx.AsyncClient(timeout=30.0)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for page in range(1, max_pages + 1):
-                response = await client.get(
-                    url,
-                    headers=headers,
-                    params={
-                        "state": state,
-                        "per_page": per_page,
-                        "page": page,
-                    },
+        for page in range(1, max_pages + 1):
+            response = await http_client.get(
+                url,
+                headers=headers,
+                params={
+                    "state": state,
+                    "per_page": per_page,
+                    "page": page,
+                },
+            )
+            if response.status_code < 200 or response.status_code >= 300:
+                detail = _safe_response_detail(response)
+                raise GitHubIssueClientError(
+                    detail.replace(
+                        "github issue request",
+                        "github issue read request",
+                    )
                 )
-                if response.status_code < 200 or response.status_code >= 300:
-                    detail = _safe_response_detail(response)
-                    raise GitHubIssueClientError(
-                        detail.replace(
-                            "github issue request",
-                            "github issue read request",
-                        )
-                    )
-                data = response.json()
-                if not isinstance(data, list):
-                    raise GitHubIssueClientError(
-                        "github issue read response was not a list"
-                    )
-                page_items = [item for item in data if isinstance(item, Mapping)]
-                issues.extend(dict(item) for item in page_items)
-                if len(data) < per_page:
-                    return issues
+            data = response.json()
+            if not isinstance(data, list):
+                raise GitHubIssueClientError(
+                    "github issue read response was not a list"
+                )
+            page_items = [item for item in data if isinstance(item, Mapping)]
+            issues.extend(dict(item) for item in page_items)
+            if len(data) < per_page:
+                return issues
     except GitHubIssueClientError:
         raise
     except httpx.HTTPError as exc:
         raise GitHubIssueClientError("github issue read request failed") from exc
+    finally:
+        if owns_client:
+            await http_client.aclose()
 
     raise GitHubIssueClientError("github issue read request failed: pagination limit reached")
 
 
 def _safe_response_detail(response: httpx.Response) -> str:
-    try:
-        data = response.json()
-    except ValueError:
-        data = None
-    if isinstance(data, Mapping):
-        message = data.get("message")
-        if isinstance(message, str) and message.strip():
-            return f"github issue request failed: {message.strip()[:300]}"
-    return f"github issue request failed: http_{response.status_code}"
+    return safe_github_response_detail(
+        response,
+        operation="github issue request",
+    )

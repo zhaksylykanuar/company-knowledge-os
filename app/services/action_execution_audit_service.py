@@ -98,6 +98,18 @@ async def list_execution_events(
     return list(rows)
 
 
+async def get_execution_event_by_idempotency_key(
+    session: AsyncSession,
+    *,
+    idempotency_key: str,
+) -> ActionExecutionEvent | None:
+    return await session.scalar(
+        select(ActionExecutionEvent).where(
+            ActionExecutionEvent.idempotency_key == idempotency_key
+        )
+    )
+
+
 def serialize_execution_event(event: ActionExecutionEvent) -> dict[str, Any]:
     return {
         "id": event.id,
@@ -142,6 +154,24 @@ def execution_event_idempotency_key(
     return f"action-execution-event:{event_type}:{digest}"
 
 
+def local_decision_event_idempotency_key(
+    *,
+    workspace_id: UUID,
+    action_proposal_id: UUID,
+    client_idempotency_key: str,
+) -> str:
+    """Scope a client key to one proposal without storing the raw value."""
+
+    digest = stable_digest(
+        {
+            "action_proposal_id": str(action_proposal_id),
+            "client_idempotency_key": client_idempotency_key,
+            "workspace_id": str(workspace_id),
+        }
+    )
+    return f"action-local-decision:{digest}"
+
+
 def stable_digest(payload: Mapping[str, Any]) -> str:
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:32]
@@ -181,6 +211,8 @@ def _safe_text(value: str | None, *, fallback: str, limit: int) -> str:
 def _event_order_case():
     return case(
         {
+            "action_proposal_approved_locally": 1,
+            "action_proposal_rejected_locally": 2,
             "execution_preview_generated": 10,
             "execution_preview_blocked": 11,
             "execution_unsupported": 12,
@@ -189,13 +221,18 @@ def _event_order_case():
             "execution_blocked": 22,
             "execution_repository_not_allowed": 23,
             "execution_confirmation_received": 30,
+            "execution_claimed": 35,
             "execution_started": 40,
             "execution_succeeded": 50,
             "execution_failed": 51,
+            "execution_outcome_uncertain": 52,
             "execution_duplicate_returned_existing_receipt": 60,
             "execution_result_sync_started": 70,
-            "execution_result_synced": 71,
-            "execution_result_sync_failed": 72,
+            "execution_reconciliation_pending": 71,
+            "execution_outcome_reconciled": 71,
+            "execution_write_not_observed": 71,
+            "execution_result_synced": 72,
+            "execution_result_sync_failed": 73,
         },
         value=ActionExecutionEvent.event_type,
         else_=100,

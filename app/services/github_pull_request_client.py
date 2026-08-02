@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from app.services.github_provider_error import safe_github_response_detail
+
 GITHUB_API_BASE_URL = "https://api.github.com"
 
 
@@ -21,6 +23,7 @@ async def list_pull_requests(
     state: str = "all",
     per_page: int = 100,
     max_pages: int = 10,
+    client: httpx.AsyncClient | None = None,
 ) -> list[dict[str, Any]]:
     """Read pull requests from a single GitHub repository.
 
@@ -50,35 +53,39 @@ async def list_pull_requests(
         "User-Agent": "founderOS",
     }
     pull_requests: list[dict[str, Any]] = []
+    owns_client = client is None
+    http_client = client or httpx.AsyncClient(timeout=30.0)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for page in range(1, max_pages + 1):
-                response = await client.get(
-                    url,
-                    headers=headers,
-                    params={
-                        "state": state,
-                        "per_page": per_page,
-                        "page": page,
-                    },
+        for page in range(1, max_pages + 1):
+            response = await http_client.get(
+                url,
+                headers=headers,
+                params={
+                    "state": state,
+                    "per_page": per_page,
+                    "page": page,
+                },
+            )
+            if response.status_code < 200 or response.status_code >= 300:
+                raise GitHubPullRequestClientError(_safe_response_detail(response))
+            data = response.json()
+            if not isinstance(data, list):
+                raise GitHubPullRequestClientError(
+                    "github pull request read response was not a list"
                 )
-                if response.status_code < 200 or response.status_code >= 300:
-                    raise GitHubPullRequestClientError(_safe_response_detail(response))
-                data = response.json()
-                if not isinstance(data, list):
-                    raise GitHubPullRequestClientError(
-                        "github pull request read response was not a list"
-                    )
-                page_items = [item for item in data if isinstance(item, Mapping)]
-                pull_requests.extend(dict(item) for item in page_items)
-                if len(data) < per_page:
-                    return pull_requests
+            page_items = [item for item in data if isinstance(item, Mapping)]
+            pull_requests.extend(dict(item) for item in page_items)
+            if len(data) < per_page:
+                return pull_requests
     except GitHubPullRequestClientError:
         raise
     except httpx.HTTPError as exc:
         raise GitHubPullRequestClientError(
             "github pull request read request failed"
         ) from exc
+    finally:
+        if owns_client:
+            await http_client.aclose()
 
     raise GitHubPullRequestClientError(
         "github pull request read request failed: pagination limit reached"
@@ -86,12 +93,7 @@ async def list_pull_requests(
 
 
 def _safe_response_detail(response: httpx.Response) -> str:
-    try:
-        data = response.json()
-    except ValueError:
-        data = None
-    if isinstance(data, Mapping):
-        message = data.get("message")
-        if isinstance(message, str) and message.strip():
-            return f"github pull request read request failed: {message.strip()[:300]}"
-    return f"github pull request read request failed: http_{response.status_code}"
+    return safe_github_response_detail(
+        response,
+        operation="github pull request read request",
+    )

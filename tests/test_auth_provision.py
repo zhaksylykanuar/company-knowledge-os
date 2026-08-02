@@ -12,7 +12,7 @@ from app.db.identity_models import Membership, User, UserSession, Workspace
 from app.main import app
 from app.services.identity_service import get_user_by_email
 from app.services.password_service import verify_password
-from scripts.create_admin_user import provision_admin_user
+from tests.identity_factory import provision_test_owner
 
 OLD_PASSWORD = "old-founder-pw"
 NEW_PASSWORD = "new-founder-pw"
@@ -24,7 +24,7 @@ def _client() -> AsyncClient:
 
 async def _provision(email: str, password: str) -> dict:
     async with AsyncSessionLocal() as session:
-        result = await provision_admin_user(
+        result = await provision_test_owner(
             session, email=email, password=password, name="Founder"
         )
         await session.commit()
@@ -102,6 +102,35 @@ async def test_change_password_rejects_wrong_current_and_accepts_correct() -> No
             assert (await _login(client, email, NEW_PASSWORD)).status_code == 200
         async with _client() as client:
             assert (await _login(client, email, OLD_PASSWORD)).status_code == 401
+    finally:
+        await _cleanup(email)
+
+
+async def test_change_password_enforces_the_enrollment_password_policy() -> None:
+    marker = uuid4().hex[:10]
+    email = f"admin-{marker}@example.test"
+    await _provision(email, OLD_PASSWORD)
+    try:
+        async with _client() as client:
+            await _login(client, email, OLD_PASSWORD)
+            too_short = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": OLD_PASSWORD, "new_password": "short"},
+            )
+            oversized_current = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": "x" * 257, "new_password": NEW_PASSWORD},
+            )
+            oversized_new = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": OLD_PASSWORD, "new_password": "x" * 257},
+            )
+
+        assert too_short.status_code == 422
+        assert oversized_current.status_code == 422
+        assert oversized_new.status_code == 422
+        async with _client() as client:
+            assert (await _login(client, email, OLD_PASSWORD)).status_code == 200
     finally:
         await _cleanup(email)
 

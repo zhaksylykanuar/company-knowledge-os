@@ -36,53 +36,22 @@ def test_api_auth_config_defaults_are_non_breaking() -> None:
     assert Settings.model_fields["api_auth_enabled"].default is False
     assert Settings.model_fields["api_auth_key"].default is None
     assert Settings.model_fields["api_auth_header_name"].default == "X-FounderOS-API-Key"
-    assert Settings.model_fields["openai_api_key"].default is None
 
 
-def test_settings_accepts_fos_openai_api_key_alias(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("FOS_OPENAI_API_KEY", "test-fos-openai-key")
-
-    config = Settings(_env_file=None)
-
-    assert config.openai_api_key == "test-fos-openai-key"
-
-
-def test_settings_prefers_standard_openai_api_key_alias(
+def test_provider_credentials_are_not_runtime_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
-    monkeypatch.setenv("FOS_OPENAI_API_KEY", "test-fos-openai-key")
+    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_ID", "12345")
+    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET", "test-webhook-secret")
 
     config = Settings(_env_file=None)
 
-    assert config.openai_api_key == "test-openai-key"
-
-
-def test_settings_accepts_fos_telegram_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
-    monkeypatch.setenv("FOS_TELEGRAM_BOT_TOKEN", "test-fos-telegram-token")
-    monkeypatch.setenv("FOS_TELEGRAM_CHAT_ID", "test-fos-telegram-chat")
-
-    config = Settings(_env_file=None)
-
-    assert config.telegram_bot_token == "test-fos-telegram-token"
-    assert config.telegram_chat_id == "test-fos-telegram-chat"
-
-
-def test_settings_prefers_standard_telegram_names(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-telegram-token")
-    monkeypatch.setenv("FOS_TELEGRAM_BOT_TOKEN", "test-fos-telegram-token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "test-telegram-chat")
-    monkeypatch.setenv("FOS_TELEGRAM_CHAT_ID", "test-fos-telegram-chat")
-
-    config = Settings(_env_file=None)
-
-    assert config.telegram_bot_token == "test-telegram-token"
-    assert config.telegram_chat_id == "test-telegram-chat"
+    assert "openai_api_key" not in Settings.model_fields
+    assert "github_app_id" not in Settings.model_fields
+    assert "github_app_webhook_secret" not in Settings.model_fields
+    assert "test-openai-key" not in repr(config)
+    assert "test-webhook-secret" not in repr(config)
 
 
 def test_dependency_allows_when_auth_disabled() -> None:
@@ -230,6 +199,19 @@ def test_fail_closed_allows_non_local_when_enabled_with_api_keys_list() -> None:
     )
 
     enforce_fail_closed_auth(config)
+
+
+def test_fail_closed_rejects_cross_site_session_cookie_mode() -> None:
+    config = Settings(
+        app_env="production",
+        api_auth_enabled=True,
+        api_auth_key=SecretStr("configured-operator-key"),
+        session_cookie_samesite="none",
+        _env_file=None,
+    )
+
+    with pytest.raises(FailClosedAuthError, match="COOKIE_SAMESITE"):
+        enforce_fail_closed_auth(config)
 
 
 def test_fail_closed_error_names_env_vars_and_hides_values() -> None:

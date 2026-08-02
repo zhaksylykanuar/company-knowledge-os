@@ -23,7 +23,9 @@ Operational rules for Codex and other AI agents working in FounderOS.
 - Task-specific constraints belong in the prompt only when they are not already
   covered here.
 - `Done when` must include verifiable checks, normally
-  `uv run ruff check .` and `uv run pytest -q` green.
+  `uv run ruff check .` and the guarded `make backend-check` green against an
+  explicit `FOUNDEROS_TEST_DATABASE_URL`. Bare pytest must fail closed unless
+  `APP_ENV=test` and a dedicated test-marked PostgreSQL target are explicit.
 
 ## Sanitization Scope
 

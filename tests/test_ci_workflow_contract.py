@@ -27,19 +27,21 @@ def test_ci_uses_least_privilege_token_and_pinned_python() -> None:
     assert "\npermissions:\n  contents: read\n" in workflow
     assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in workflow
     assert (
-        "postgres:16@sha256:081f1bc7bd5e143dbb6e487b710bbc27712cdcfaced4c071b8e47349aa1b4171"
+        "postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20"
         in workflow
     )
     assert "persist-credentials: false" in workflow
     assert "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0" in workflow
     assert "python-version-file: .python-version" in workflow
     assert "uv sync --frozen" in workflow
+    assert "uv run pip-audit --local --progress-spinner off" in workflow
     assert "uv run alembic upgrade head" in workflow
+    assert "npm audit --audit-level=moderate" in workflow
     assert "bash scripts/check_no_secrets.sh --tracked" in workflow
     assert (ROOT / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
 
 
-def test_codeql_scans_python_and_github_actions_with_v4() -> None:
+def test_codeql_scans_python_javascript_and_github_actions_with_v4() -> None:
     workflow = _text(".github/workflows/codeql.yml")
 
     assert "github/codeql-action/init@411bbbe57033eedfc1a82d68c01345aa96c737d7 # v4" in workflow
@@ -49,7 +51,7 @@ def test_codeql_scans_python_and_github_actions_with_v4() -> None:
     assert "contents: read" in workflow
     assert "pull-requests: read" in workflow
     assert "security-events: write" in workflow
-    assert "language: [python, actions]" in workflow
+    assert "language: [python, javascript-typescript, actions]" in workflow
     assert "queries: security-and-quality" in workflow
     assert "schedule:" in workflow
     assert "pull_request:" in workflow
@@ -154,21 +156,35 @@ def test_dependabot_tracks_github_actions() -> None:
     assert 'interval: "weekly"' in dependabot
 
 
-def test_renovate_tracks_uv_python_dependencies_without_action_duplicates() -> None:
+def test_renovate_tracks_python_frontend_and_compose_without_action_duplicates() -> None:
     renovate = json.loads(_text("renovate.json"))
 
     assert renovate["$schema"] == "https://docs.renovatebot.com/renovate-schema.json"
-    assert renovate["enabledManagers"] == ["pep621"]
+    assert renovate["enabledManagers"] == ["npm", "pep621", "docker-compose"]
     assert renovate["dependencyDashboard"] is True
     assert renovate["rangeStrategy"] == "bump"
     assert renovate["lockFileMaintenance"] == {
         "enabled": True,
         "schedule": ["before 6am on monday"],
     }
-    assert "uv" in renovate["labels"]
+    assert renovate["labels"] == ["dependencies"]
 
-    package_rule = renovate["packageRules"][0]
-    assert package_rule["matchManagers"] == ["pep621"]
-    assert package_rule["matchDatasources"] == ["pypi"]
-    assert package_rule["minimumReleaseAge"] == "3 days"
+    package_rules = {
+        rule["matchManagers"][0]: rule for rule in renovate["packageRules"]
+    }
+    python_rule = package_rules["pep621"]
+    assert python_rule["matchDatasources"] == ["pypi"]
+    assert python_rule["minimumReleaseAge"] == "3 days"
+    assert python_rule["addLabels"] == ["python", "uv"]
+
+    npm_rule = package_rules["npm"]
+    assert npm_rule["matchFileNames"] == ["web/package.json"]
+    assert npm_rule["minimumReleaseAge"] == "3 days"
+    assert npm_rule["addLabels"] == ["javascript", "npm"]
+
+    compose_rule = package_rules["docker-compose"]
+    assert compose_rule["matchDatasources"] == ["docker"]
+    assert compose_rule["minimumReleaseAge"] == "3 days"
+    assert compose_rule["pinDigests"] is True
+    assert compose_rule["addLabels"] == ["docker", "runtime"]
     assert "github-actions" not in json.dumps(renovate)

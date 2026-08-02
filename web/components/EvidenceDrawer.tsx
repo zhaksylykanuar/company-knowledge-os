@@ -6,12 +6,18 @@ type EvidenceDrawerProps = {
   evidence: BriefingEvidenceRef | null;
   itemTitle?: string | null;
   onClose?: () => void;
+  selectionMode?: "default" | "manual" | null;
+  selectionDescription?: string | null;
+  evidenceCount?: number | null;
 };
 
 export function EvidenceDrawer({
   evidence,
   itemTitle = null,
-  onClose
+  onClose,
+  selectionMode = null,
+  selectionDescription = null,
+  evidenceCount = null
 }: EvidenceDrawerProps) {
   return (
     <aside className="evidence-drawer" aria-labelledby="evidence-drawer-title">
@@ -26,6 +32,15 @@ export function EvidenceDrawer({
           </button>
         ) : null}
       </div>
+
+      {evidence && selectionMode ? (
+        <p className="muted evidence-context">
+          {selectionDescription ??
+            (selectionMode === "manual"
+              ? M.evidence.contextManual
+              : M.evidence.contextDefault)}
+        </p>
+      ) : null}
 
       {evidence ? (
         <dl className="work-meta">
@@ -45,6 +60,12 @@ export function EvidenceDrawer({
             <dt>{M.evidence.record}</dt>
             <dd>{evidence.ref || M.evidence.noRecordId}</dd>
           </div>
+          {typeof evidenceCount === "number" && evidenceCount > 0 ? (
+            <div>
+              <dt>{M.evidence.countLabel}</dt>
+              <dd>{evidenceCount}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>{M.evidence.snippet}</dt>
             <dd>{M.evidence.noSnippet}</dd>

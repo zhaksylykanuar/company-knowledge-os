@@ -1,17 +1,28 @@
+import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-LOCAL_CORS_ALLOWED_ORIGINS = (
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-)
+LOCAL_CORS_ALLOWED_ORIGINS = ("http://127.0.0.1:3000",)
+DOTENV_DISABLE_ENV = "FOUNDEROS_DISABLE_DOTENV"
+TRUE_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _settings_env_files() -> str | None:
+    if os.environ.get(DOTENV_DISABLE_ENV, "").strip().casefold() in TRUE_ENV_VALUES:
+        return None
+    return ".env.local"
 
 
 def _default_local_workspace_path() -> str:
     return str(Path(__file__).resolve().parents[2] / ".local")
+
+
+def _default_repository_intelligence_data_path() -> str:
+    return str(Path(__file__).resolve().parents[3] / "founderos-ri-data")
 
 
 def _split_csv_config(value: str | None) -> list[str]:
@@ -53,6 +64,22 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_name: str = "company-knowledge-os"
     api_base_url: str = "http://localhost:8000"
+    # Minimum level for the application's basic request logger (MVP §1.5
+    # "basic logging"). Standard Python level name; invalid values fall back to
+    # INFO. The logger only records method, sanitized path, status, and duration
+    # — never secrets, query values, headers, or request/response bodies.
+    log_level: str = Field(
+        default="INFO",
+        validation_alias=AliasChoices("FOUNDEROS_LOG_LEVEL", "LOG_LEVEL"),
+    )
+    readiness_database_timeout_seconds: float = Field(
+        default=2.0,
+        gt=0,
+        le=10,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_READINESS_DATABASE_TIMEOUT_SECONDS"
+        ),
+    )
 
     # --- Local dev bootstrap (safe to surface to the browser in local) ---
     # The base URL the browser should call, the dev API key handed to the
@@ -80,13 +107,78 @@ class Settings(BaseSettings):
         default_factory=_default_local_workspace_path,
         validation_alias=AliasChoices("FOUNDEROS_LOCAL_WORKSPACE_PATH"),
     )
+    repository_intelligence_data_path: str = Field(
+        default_factory=_default_repository_intelligence_data_path,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_DATA_PATH"
+        ),
+    )
+    repository_intelligence_checkout_timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        le=300,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_TIMEOUT_SECONDS"
+        ),
+    )
+    repository_intelligence_checkout_max_files: int = Field(
+        default=20_000,
+        ge=1,
+        le=200_000,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_FILES"
+        ),
+    )
+    repository_intelligence_checkout_max_bytes: int = Field(
+        default=512 * 1024 * 1024,
+        ge=1024,
+        le=10 * 1024 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_file_bytes: int = Field(
+        default=64 * 1024 * 1024,
+        ge=1,
+        le=1024 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_FILE_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_command_output_bytes: int = Field(
+        default=8 * 1024 * 1024,
+        ge=1024,
+        le=128 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_COMMAND_OUTPUT_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_path_bytes: int = Field(
+        default=1024,
+        ge=64,
+        le=4096,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_PATH_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_depth: int = Field(
+        default=64,
+        ge=1,
+        le=256,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_DEPTH"
+        ),
+    )
 
     database_url: str = "postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos"
     redis_url: str = "redis://localhost:6379/0"
 
     raw_storage_dir: str = "./raw_storage"
 
-    enable_llm: bool = False
+    enable_llm: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("ENABLE_LLM", "FOUNDEROS_ENABLE_LLM"),
+    )
     enable_write_actions: bool = False
     github_write_allowed_repos: str | None = Field(
         default=None,
@@ -98,6 +190,40 @@ class Settings(BaseSettings):
     github_sync_allowed_repos: str | None = Field(
         default=None,
         validation_alias=AliasChoices("FOS_GITHUB_SYNC_ALLOWED_REPOS"),
+    )
+    github_sync_worker_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_WORKER_ENABLED"),
+    )
+    github_sync_worker_concurrency: int = Field(
+        default=2,
+        ge=1,
+        le=4,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_WORKER_CONCURRENCY"),
+    )
+    github_sync_worker_poll_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        le=30,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_WORKER_POLL_SECONDS"),
+    )
+    github_sync_job_lease_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_JOB_LEASE_SECONDS"),
+    )
+    github_sync_job_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_JOB_MAX_ATTEMPTS"),
+    )
+    github_sync_job_retry_base_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=300,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_JOB_RETRY_BASE_SECONDS"),
     )
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
@@ -118,10 +244,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("FOUNDEROS_OBSIDIAN_SYNC_MODE"),
     )
 
-    # --- Real read-only connector execution (opt-in; default OFF) ---
+    # --- Real connector network execution (opt-in; default OFF) ---
     # When false, real Jira/GitHub clients never make a network call; only
-    # internal/local sources run. Even when true, connectors stay read-only
-    # and only run through an explicit operator request plus live-provider ack.
+    # internal/local sources run. Enabling this gate permits provider network
+    # access only. Provider writes additionally require ENABLE_WRITE_ACTIONS,
+    # the approval/evidence/idempotency policy, and an explicit bounded request.
     enable_real_connectors: bool = Field(
         default=False,
         validation_alias=AliasChoices("FOUNDEROS_ENABLE_REAL_CONNECTORS"),
@@ -178,9 +305,16 @@ class Settings(BaseSettings):
         default="founderos_session",
         validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_NAME"),
     )
-    session_cookie_samesite: str = Field(
+    session_cookie_samesite: Literal["lax", "strict", "none"] = Field(
         default="lax",
         validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_SAMESITE"),
+    )
+    session_last_seen_interval_seconds: int = Field(
+        default=300,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_SESSION_LAST_SEEN_INTERVAL_SECONDS"
+        ),
     )
     # Login brute-force throttle: lock an email after N consecutive failures
     # for a cooldown window. DB-backed (login_attempts).
@@ -191,6 +325,97 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = Field(
         default=15,
         validation_alias=AliasChoices("FOUNDEROS_LOGIN_LOCKOUT_MINUTES"),
+    )
+    # Production admission control runs before Argon2. Defaults fit the current
+    # single-process private-beta deployment; multi-process deployments require
+    # a shared edge/Redis limiter in addition to these process-local bounds.
+    login_rate_limit_window_seconds: int = Field(
+        default=60,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_WINDOW_SECONDS"),
+    )
+    login_rate_limit_per_ip: int = Field(
+        default=20,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_PER_IP"),
+    )
+    login_rate_limit_global: int = Field(
+        default=100,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_GLOBAL"),
+    )
+    login_max_concurrent_attempts: int = Field(
+        default=4,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS"),
+    )
+    login_rate_limit_backend: Literal["process", "redis"] = Field(
+        default="process",
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_BACKEND"),
+    )
+    login_rate_limit_redis_timeout_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        le=5,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_LOGIN_RATE_LIMIT_REDIS_TIMEOUT_SECONDS"
+        ),
+    )
+    trust_proxy_headers: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("FOUNDEROS_TRUST_PROXY_HEADERS"),
+    )
+    trusted_proxy_cidrs: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_TRUSTED_PROXY_CIDRS"),
+    )
+    login_attempt_retention_hours: int = Field(
+        default=24,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS"),
+    )
+    auth_artifact_cleanup_interval_seconds: int = Field(
+        default=3600,
+        ge=60,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_AUTH_ARTIFACT_CLEANUP_INTERVAL_SECONDS"
+        ),
+    )
+    revoked_session_retention_hours: int = Field(
+        default=24,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REVOKED_SESSION_RETENTION_HOURS"
+        ),
+    )
+    # Read-only assistant admission. The current runtime is one Uvicorn process;
+    # any future multi-worker/public topology must replace this process-local
+    # availability guard with a shared limiter.
+    assistant_query_rate_limit_window_seconds: int = Field(
+        default=60,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_ASSISTANT_QUERY_RATE_LIMIT_WINDOW_SECONDS"
+        ),
+    )
+    assistant_query_rate_limit_per_user_workspace: int = Field(
+        default=30,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_ASSISTANT_QUERY_RATE_LIMIT_PER_USER_WORKSPACE"
+        ),
+    )
+    assistant_query_timeout_seconds: float = Field(
+        default=20.0,
+        gt=0,
+        le=60,
+        validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_QUERY_TIMEOUT_SECONDS"),
+    )
+    assistant_llm_timeout_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        le=45,
+        validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_LLM_TIMEOUT_SECONDS"),
     )
 
     cors_allowed_origins: str | None = Field(
@@ -208,67 +433,14 @@ class Settings(BaseSettings):
         ),
     )
 
-    openai_api_key: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("OPENAI_API_KEY", "FOS_OPENAI_API_KEY"),
-    )
-
-    google_client_secrets_file: str = "./secrets/google_oauth_client.json"
-    google_token_file: str = "./secrets/google_token.json"
-    google_gmail_backfill_enabled: bool = False
-    google_gmail_backfill_query: str | None = None
-    google_drive_backfill_enabled: bool = False
-    google_drive_ai_inbox_folder_id: str | None = None
-    google_pubsub_topic: str | None = None
-    google_pubsub_subscription: str | None = None
-    google_gmail_token_file: str = "./secrets/google_gmail_token.json"
-
-    email_me_addresses: str | None = None
-    email_digest_show_low_priority: bool = False
-    email_digest_show_marketing: bool = False
-    email_digest_show_automated: bool = False
-    email_digest_debug_triage: bool = False
-    email_digest_debug_evidence: bool = False
-    email_important_senders: str | None = None
-    email_important_domains: str | None = None
-    email_marketing_sender_blocklist: str | None = None
-    email_important_project_keywords: str | None = None
-
-    attention_triage_enabled: bool = False
-    attention_triage_provider: str = "openai"
-    attention_triage_model: str | None = None
-    attention_triage_min_confidence_to_hide: float = 0.80
-    attention_triage_review_threshold: float = 0.55
-    attention_triage_max_text_chars: int = 6000
-    digest_show_hidden: bool = False
-    digest_debug_triage: bool = False
-    digest_debug_evidence: bool = False
-
-    jira_base_url: str | None = None
-    jira_email: str | None = None
-    jira_api_token: str | None = None
-
-    github_webhook_secret: str | None = None
-    gitlab_webhook_secret: str | None = None
-    bitbucket_webhook_secret: str | None = None
-
-    telegram_bot_token: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("TELEGRAM_BOT_TOKEN", "FOS_TELEGRAM_BOT_TOKEN"),
-    )
-    telegram_chat_id: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("TELEGRAM_CHAT_ID", "FOS_TELEGRAM_CHAT_ID"),
-    )
-    telegram_webhook_secret_token: str | None = None
-
     obsidian_vault_path: str = "./obsidian_vault"
 
     model_config = SettingsConfigDict(
-        # Priority (highest first): real env vars > .env.local > .env > defaults.
-        # pydantic-settings loads listed files in order, later overriding
-        # earlier; a missing file is skipped. .env.local stays out of git.
-        env_file=(".env", ".env.local"),
+        # Priority (highest first): real env vars > .env.local > defaults.
+        # `.env.local` is the single canonical local runtime file and stays out
+        # of git. The backend checker sets FOUNDEROS_DISABLE_DOTENV before this
+        # module is imported, disabling the file for isolated commands.
+        env_file=_settings_env_files(),
         extra="ignore",
         populate_by_name=True,
     )

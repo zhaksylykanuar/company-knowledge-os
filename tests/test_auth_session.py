@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, select, update
 
+from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import User, UserSession
 from app.services.session_service import (
@@ -61,6 +62,36 @@ async def test_create_then_validate_returns_user_and_bumps_last_seen() -> None:
                 select(UserSession).where(UserSession.token_hash == _token_hash(raw_token))
             )
         assert row is not None and row.last_seen_at is not None
+    finally:
+        await _cleanup(user_id)
+
+
+async def test_frequent_validation_does_not_rewrite_last_seen(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    user_id = await _seed_user(marker)
+    try:
+        monkeypatch.setattr(settings, "session_last_seen_interval_seconds", 300)
+        async with AsyncSessionLocal() as session:
+            raw_token, row = await create_session(session, user_id)
+            baseline = datetime.now(timezone.utc)
+            row.last_seen_at = baseline
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            assert await validate_session(session, raw_token) is not None
+            assert not session.dirty
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            stored = await session.scalar(
+                select(UserSession).where(
+                    UserSession.token_hash == _token_hash(raw_token)
+                )
+            )
+        assert stored is not None
+        assert stored.last_seen_at == baseline
     finally:
         await _cleanup(user_id)
 

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.workspace_auth import (
@@ -13,7 +15,7 @@ from app.api.workspace_auth import (
     require_workspace_role,
 )
 from app.db.base import AsyncSessionLocal
-from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN
+from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN, MEMBERSHIP_ROLE_OWNER
 from app.db.integration_models import INTEGRATION_CONNECTION_STATUS_CONNECTED
 from app.services.github_connection_service import (
     GITHUB_PROVIDER_TOKEN_WARNING,
@@ -22,6 +24,27 @@ from app.services.github_connection_service import (
     get_github_connection,
     get_github_connection_status,
     list_github_connections,
+)
+from app.services.github_app_live_sync_service import (
+    GitHubAppLiveSyncConflictError,
+    GitHubAppLiveSyncError,
+    GitHubAppLiveSyncInput,
+    GitHubAppLiveSyncNotFoundError,
+    enqueue_github_app_installation_sync,
+)
+from app.services.github_app_setup_service import (
+    GitHubAppManifestStartInput,
+    GitHubAppSetupError,
+    begin_github_app_oauth_from_installation,
+    cancel_github_app_oauth_callback,
+    complete_github_app_manifest_callback,
+    complete_github_app_oauth_callback,
+    finalize_github_app_repositories,
+    get_github_app_setup_status,
+    launch_github_app_installation,
+    refresh_github_app_repository_inventory,
+    restart_github_app_setup,
+    start_github_app_manifest_setup,
 )
 from app.services.github_normalization_service import (
     GITHUB_NORMALIZATION_JOB_NOT_FOUND,
@@ -40,32 +63,20 @@ from app.services.github_repository_read_service import (
     GitHubRepositoryFilters,
     list_workspace_github_repositories,
 )
-from app.services.github_selected_issue_sync_service import (
-    GitHubSelectedIssueSyncConflictError,
-    GitHubSelectedIssueSyncError,
-    GitHubSelectedIssueSyncInput,
-    GitHubSelectedIssueSyncNotFoundError,
-    GitHubSelectedIssueSyncProviderReadError,
-    sync_selected_repository_issues,
-)
-from app.services.github_selected_pr_sync_service import (
-    GitHubSelectedPRSyncConflictError,
-    GitHubSelectedPRSyncError,
-    GitHubSelectedPRSyncInput,
-    GitHubSelectedPRSyncNotFoundError,
-    GitHubSelectedPRSyncProviderReadError,
-    sync_selected_repository_pull_requests,
-)
 from app.services.github_sync_job_service import (
     GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED,
     GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND,
+    GITHUB_SYNC_JOB_ALREADY_FINISHED,
+    GITHUB_SYNC_JOB_NOT_FOUND,
     GITHUB_SYNC_JOB_NO_EXECUTION_WARNING,
     GitHubManualSyncJobInput,
     GitHubSyncJobError,
     create_manual_github_sync_job,
     get_github_sync_job,
     list_github_sync_jobs,
+    request_github_sync_job_cancellation,
 )
+from app.services.real_connector_guard import RealConnectorsDisabledError
 from app.services.secret_encryption import SecretEncryptionError
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/github", tags=["github"])
@@ -112,6 +123,7 @@ class GitHubConnectionRead(BaseModel):
     last_error: str | None = None
     has_access_token: bool
     has_refresh_token: bool
+    connection_method: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
@@ -125,9 +137,26 @@ class GitHubConnectionListResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GitHubAppConfigStatusRead(BaseModel):
+    configured: bool
+    credential_source: str = "none"
+    app_id_configured: bool
+    app_slug: str | None = None
+    app_name: str | None = None
+    private_key_configured: bool
+    private_key_source: str | None = None
+    webhook_secret_configured: bool
+    setup_url: str | None = None
+    callback_url: str | None = None
+    missing_requirements: list[str] = Field(default_factory=list)
+    installation_tokens_persisted: bool
+    provider_writes_enabled: bool
+
+
 class GitHubConnectionStatusResponse(BaseModel):
     provider: str
     status: str
+    connection_method: str | None = None
     connection_id: UUID | None = None
     display_name: str | None = None
     last_sync_at: datetime | None = None
@@ -136,8 +165,84 @@ class GitHubConnectionStatusResponse(BaseModel):
     has_valid_token_record: bool
     repository_read_available: bool
     repository_read_source: str
+    installation_verified: bool = False
+    live_read_available: bool = False
+    selected_repositories: list[str] = Field(default_factory=list)
     is_live: bool
+    app: GitHubAppConfigStatusRead
     warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubAppSetupRepositoryRead(BaseModel):
+    id: str
+    name: str
+    full_name: str
+    private: bool
+    visibility: str
+    archived: bool
+    default_branch: str | None = None
+    source_url: str | None = None
+    last_activity_at: str | None = None
+
+
+class GitHubAppSetupStatusResponse(BaseModel):
+    phase: str
+    credential_source: str
+    app_slug: str | None = None
+    app_name: str | None = None
+    installation_account: str | None = None
+    installation_settings_url: str | None = None
+    repository_count: int
+    repositories: list[GitHubAppSetupRepositoryRead] = Field(default_factory=list)
+    selected_repositories: list[str] = Field(default_factory=list)
+    expires_at: datetime | None = None
+    error_code: str | None = None
+    install_url: str | None = None
+    can_manage: bool
+    can_restart: bool
+    setup_owned_by_current_user: bool
+    installation_verified: bool
+    secrets_encrypted: bool
+    installation_tokens_persisted: bool
+    provider_writes_enabled: bool
+
+
+class GitHubAppManifestStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    owner_type: str = Field(pattern="^(user|organization)$")
+    organization_login: str | None = Field(default=None, max_length=39)
+    app_origin: str = Field(min_length=1, max_length=1000)
+
+
+class GitHubAppManifestLaunchResponse(BaseModel):
+    phase: str
+    action_url: str
+    manifest: str
+    expires_at: datetime
+
+
+class GitHubAppInstallLaunchResponse(BaseModel):
+    phase: str
+    redirect_url: str
+    expires_at: datetime
+
+
+class GitHubAppRepositorySelectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    repositories: list[str] = Field(min_length=1, max_length=100)
+
+
+class GitHubAppRepositorySelectionResponse(BaseModel):
+    phase: str
+    connection_id: UUID
+    selected_repositories: list[str]
+    repository_count: int
+
+
+class GitHubAppSetupRestartResponse(BaseModel):
+    phase: str
 
 
 class GitHubProviderTokenConnectionRequest(BaseModel):
@@ -191,6 +296,11 @@ class GitHubSyncJobRead(BaseModel):
     records_updated: int
     error_message: str | None = None
     logs: dict[str, Any] | None = None
+    attempt_count: int
+    max_attempts: int
+    next_attempt_at: datetime
+    cancel_requested_at: datetime | None = None
+    progress: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
     is_live: bool
@@ -289,6 +399,11 @@ class GitHubNormalizationSyncJobRead(BaseModel):
     records_updated: int
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    attempt_count: int = 0
+    max_attempts: int = 3
+    next_attempt_at: datetime | None = None
+    cancel_requested_at: datetime | None = None
+    progress: dict[str, Any] | None = None
 
 
 class GitHubNormalizationResponse(BaseModel):
@@ -298,6 +413,60 @@ class GitHubNormalizationResponse(BaseModel):
     is_live: bool
     provider_sync_started: bool
     local_normalization_performed: bool
+    persistence_mode: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubAppLiveSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    connection_id: UUID
+    repositories: list[str] = Field(min_length=1, max_length=20)
+    include_issues: bool = True
+    include_pull_requests: bool = True
+    issue_states: list[str] = Field(
+        default_factory=lambda: ["open", "closed"],
+        max_length=3,
+    )
+    pull_request_states: list[str] = Field(
+        default_factory=lambda: ["open", "closed", "merged"],
+        max_length=4,
+    )
+
+
+class GitHubAppLiveSyncRepositoryRead(BaseModel):
+    full_name: str
+    synced_issues: int
+    synced_pull_requests: int
+    skipped_pull_requests: int
+
+
+class GitHubAppLiveSyncTotalsRead(BaseModel):
+    repositories: int
+    issues: int
+    pull_requests: int
+    skipped_pull_requests: int
+
+
+class GitHubAppLiveSyncCapabilitiesRead(BaseModel):
+    read_only_sync: bool
+    external_writes: bool
+    installation_access_token_persisted: bool
+
+
+class GitHubAppLiveSyncResponse(BaseModel):
+    workspace_id: UUID
+    connection_id: UUID
+    installation_id: str
+    repositories: list[GitHubAppLiveSyncRepositoryRead]
+    totals: GitHubAppLiveSyncTotalsRead
+    sync_job: GitHubNormalizationSyncJobRead
+    counts: GitHubNormalizationCountsRead
+    capabilities: GitHubAppLiveSyncCapabilitiesRead
+    is_live: bool
+    provider_sync_started: bool
+    local_normalization_performed: bool
+    external_write_performed: bool
     persistence_mode: str
     warnings: list[str] = Field(default_factory=list)
 
@@ -320,93 +489,6 @@ class GitHubLocalSyncResponse(BaseModel):
     provider_sync_started: bool
     local_normalization_performed: bool
     persistence_mode: str
-    warnings: list[str] = Field(default_factory=list)
-
-
-class GitHubSelectedIssueSyncRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    connection_id: UUID
-    repositories: list[str] = Field(min_length=1, max_length=20)
-    states: list[str] = Field(default_factory=lambda: ["open", "closed"], max_length=3)
-
-
-class GitHubSelectedIssueSyncRepositoryRead(BaseModel):
-    full_name: str
-    synced_issues: int
-    open_issues: int
-    closed_issues: int
-    skipped_pull_requests: int
-
-
-class GitHubSelectedIssueSyncTotalsRead(BaseModel):
-    repositories: int
-    issues: int
-    open_issues: int
-    closed_issues: int
-    skipped_pull_requests: int
-
-
-class GitHubSelectedIssueSyncCapabilitiesRead(BaseModel):
-    read_only_sync: bool
-    external_writes: bool
-
-
-class GitHubSelectedIssueSyncResponse(BaseModel):
-    workspace_id: UUID
-    repositories: list[GitHubSelectedIssueSyncRepositoryRead]
-    totals: GitHubSelectedIssueSyncTotalsRead
-    sync_job: GitHubNormalizationSyncJobRead
-    counts: GitHubNormalizationCountsRead
-    capabilities: GitHubSelectedIssueSyncCapabilitiesRead
-    is_live: bool
-    provider_sync_started: bool
-    external_write_performed: bool
-    warnings: list[str] = Field(default_factory=list)
-
-
-class GitHubSelectedPullRequestSyncRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    connection_id: UUID
-    repositories: list[str] = Field(min_length=1, max_length=20)
-    states: list[str] = Field(
-        default_factory=lambda: ["open", "closed", "merged"],
-        max_length=4,
-    )
-
-
-class GitHubSelectedPullRequestSyncRepositoryRead(BaseModel):
-    full_name: str
-    synced_pull_requests: int
-    open_pull_requests: int
-    closed_pull_requests: int
-    merged_pull_requests: int
-
-
-class GitHubSelectedPullRequestSyncTotalsRead(BaseModel):
-    repositories: int
-    pull_requests: int
-    open_pull_requests: int
-    closed_pull_requests: int
-    merged_pull_requests: int
-
-
-class GitHubSelectedPullRequestSyncCapabilitiesRead(BaseModel):
-    read_only_sync: bool
-    external_writes: bool
-
-
-class GitHubSelectedPullRequestSyncResponse(BaseModel):
-    workspace_id: UUID
-    repositories: list[GitHubSelectedPullRequestSyncRepositoryRead]
-    totals: GitHubSelectedPullRequestSyncTotalsRead
-    sync_job: GitHubNormalizationSyncJobRead
-    counts: GitHubNormalizationCountsRead
-    capabilities: GitHubSelectedPullRequestSyncCapabilitiesRead
-    is_live: bool
-    provider_sync_started: bool
-    external_write_performed: bool
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -453,6 +535,291 @@ class GitHubOperationalWorkResponse(BaseModel):
     source: str
     is_live: bool
     warnings: list[str] = Field(default_factory=list)
+
+
+async def require_github_setup_admin_session(
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> WorkspaceAccess:
+    if access.actor.is_operator or access.actor.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="browser session required for GitHub App setup",
+        )
+    return access
+
+
+@router.get("/app-setup", response_model=GitHubAppSetupStatusResponse)
+async def get_github_app_setup_state(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> GitHubAppSetupStatusResponse:
+    role = access.workspace_membership.membership.role
+    can_manage = bool(
+        role in {MEMBERSHIP_ROLE_OWNER, MEMBERSHIP_ROLE_ADMIN}
+        and not access.actor.is_operator
+        and access.actor.user_id is not None
+    )
+    async with AsyncSessionLocal() as session:
+        payload = await get_github_app_setup_status(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=access.actor.user_id,
+            can_manage=can_manage,
+        )
+    return GitHubAppSetupStatusResponse.model_validate(payload)
+
+
+@router.post(
+    "/app-setup/manifest",
+    response_model=GitHubAppManifestLaunchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_github_app_manifest_flow(
+    workspace_id: UUID,
+    payload: GitHubAppManifestStartRequest,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppManifestLaunchResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            launch = await start_github_app_manifest_setup(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                payload=GitHubAppManifestStartInput(
+                    owner_type=payload.owner_type,
+                    organization_login=payload.organization_login,
+                    app_origin=payload.app_origin,
+                ),
+            )
+            await session.commit()
+        except SecretEncryptionError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="secret encryption is not configured",
+            ) from exc
+        except GitHubAppSetupError as exc:
+            await session.rollback()
+            _raise_github_setup_http_error(exc)
+    return GitHubAppManifestLaunchResponse(
+        phase=launch.phase,
+        action_url=launch.action_url,
+        manifest=launch.manifest,
+        expires_at=launch.expires_at,
+    )
+
+
+@router.post(
+    "/app-setup/install",
+    response_model=GitHubAppInstallLaunchResponse,
+)
+async def start_github_app_installation_flow(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppInstallLaunchResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            launch = await launch_github_app_installation(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+            )
+            await session.commit()
+        except GitHubAppSetupError as exc:
+            await session.rollback()
+            _raise_github_setup_http_error(exc)
+    return GitHubAppInstallLaunchResponse(
+        phase=launch.phase,
+        redirect_url=launch.redirect_url,
+        expires_at=launch.expires_at,
+    )
+
+
+@router.get("/app-setup/callback/manifest", include_in_schema=False)
+async def github_app_manifest_callback(
+    workspace_id: UUID,
+    code: str | None = Query(default=None),
+    state_value: str | None = Query(default=None, alias="state"),
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> RedirectResponse:
+    if not code or not state_value:
+        return _github_setup_return_redirect()
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            await complete_github_app_manifest_callback(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                state=state_value,
+                code=code,
+            )
+            await session.commit()
+        except GitHubAppSetupError:
+            await session.rollback()
+    return _github_setup_return_redirect()
+
+
+@router.get("/app-setup/callback/installation", include_in_schema=False)
+async def github_app_installation_callback(
+    workspace_id: UUID,
+    installation_id: str | None = Query(default=None),
+    state_value: str | None = Query(default=None, alias="state"),
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> RedirectResponse:
+    if not installation_id or not state_value:
+        return _github_setup_return_redirect()
+    actor_user_id = _github_setup_actor_user_id(access)
+    redirect_url: str | None = None
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await begin_github_app_oauth_from_installation(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                installation_id=installation_id,
+                state=state_value,
+            )
+            redirect_url = result.redirect_url if result.succeeded else None
+            await session.commit()
+        except GitHubAppSetupError:
+            await session.rollback()
+    return (
+        _github_provider_redirect(redirect_url)
+        if redirect_url is not None
+        else _github_setup_return_redirect()
+    )
+
+
+@router.get("/app-setup/callback/oauth", include_in_schema=False)
+async def github_app_oauth_callback(
+    workspace_id: UUID,
+    code: str | None = Query(default=None),
+    provider_error: str | None = Query(default=None, alias="error"),
+    state_value: str | None = Query(default=None, alias="state"),
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> RedirectResponse:
+    if not state_value:
+        return _github_setup_return_redirect()
+    actor_user_id = _github_setup_actor_user_id(access)
+    if not code:
+        if provider_error:
+            async with AsyncSessionLocal() as session:
+                try:
+                    await cancel_github_app_oauth_callback(
+                        session,
+                        workspace_id=workspace_id,
+                        actor_user_id=actor_user_id,
+                        state=state_value,
+                    )
+                    await session.commit()
+                except GitHubAppSetupError:
+                    await session.rollback()
+        return _github_setup_return_redirect()
+    succeeded = False
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await complete_github_app_oauth_callback(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                state=state_value,
+                code=code,
+            )
+            succeeded = result.succeeded
+            await session.commit()
+        except GitHubAppSetupError:
+            await session.rollback()
+
+    if succeeded:
+        async with AsyncSessionLocal() as inventory_session:
+            try:
+                await refresh_github_app_repository_inventory(
+                    inventory_session,
+                    workspace_id=workspace_id,
+                    actor_user_id=actor_user_id,
+                )
+                await inventory_session.commit()
+            except GitHubAppSetupError:
+                # The verified connection remains durable. The safe error code
+                # written by the service is committed so the UI can offer retry.
+                await inventory_session.commit()
+    return _github_setup_return_redirect()
+
+
+@router.post(
+    "/app-setup/repositories/refresh",
+    response_model=GitHubAppSetupStatusResponse,
+)
+async def refresh_github_app_setup_repositories(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppSetupStatusResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            await refresh_github_app_repository_inventory(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+            )
+            await session.commit()
+        except GitHubAppSetupError as exc:
+            await session.commit()
+            _raise_github_setup_http_error(exc)
+        payload = await get_github_app_setup_status(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
+            can_manage=True,
+        )
+    return GitHubAppSetupStatusResponse.model_validate(payload)
+
+
+@router.post(
+    "/app-setup/repositories",
+    response_model=GitHubAppRepositorySelectionResponse,
+)
+async def save_github_app_setup_repositories(
+    workspace_id: UUID,
+    payload: GitHubAppRepositorySelectionRequest,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppRepositorySelectionResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await finalize_github_app_repositories(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                selected_repositories=payload.repositories,
+            )
+            await session.commit()
+        except GitHubAppSetupError as exc:
+            await session.rollback()
+            _raise_github_setup_http_error(exc)
+    return GitHubAppRepositorySelectionResponse.model_validate(result)
+
+
+@router.post(
+    "/app-setup/restart",
+    response_model=GitHubAppSetupRestartResponse,
+)
+async def restart_github_app_setup_flow(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppSetupRestartResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        phase = await restart_github_app_setup(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
+        )
+        await session.commit()
+    return GitHubAppSetupRestartResponse(phase=phase)
 
 
 @router.get("/connections", response_model=GitHubConnectionListResponse)
@@ -527,6 +894,98 @@ async def create_github_provider_token_connection(
         is_live=False,
         warnings=[GITHUB_PROVIDER_TOKEN_WARNING],
     )
+
+
+@router.post(
+    "/connections/app-installation/sync",
+    response_model=GitHubAppLiveSyncResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def run_github_app_installation_live_sync(
+    workspace_id: UUID,
+    payload: GitHubAppLiveSyncRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubAppLiveSyncResponse:
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await enqueue_github_app_installation_sync(
+                session,
+                workspace_id=workspace_id,
+                input_payload=GitHubAppLiveSyncInput(
+                    connection_id=payload.connection_id,
+                    repositories=payload.repositories,
+                    include_issues=payload.include_issues,
+                    include_pull_requests=payload.include_pull_requests,
+                    issue_states=payload.issue_states,
+                    pull_request_states=payload.pull_request_states,
+                ),
+                requested_by=access.actor.auth_mode,
+            )
+            await session.commit()
+        except RealConnectorsDisabledError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except GitHubAppLiveSyncNotFoundError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+        except GitHubAppLiveSyncConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except GitHubAppLiveSyncError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubAppLiveSyncResponse.model_validate(result)
+
+
+@router.post(
+    "/sync-jobs/{sync_job_id}/cancel",
+    response_model=GitHubSyncJobRead,
+)
+async def cancel_github_sync_job_record(
+    workspace_id: UUID,
+    sync_job_id: UUID,
+    access: WorkspaceAccess = Depends(
+        require_workspace_role(MEMBERSHIP_ROLE_ADMIN)
+    ),
+) -> GitHubSyncJobRead:
+    async with AsyncSessionLocal() as session:
+        try:
+            sync_job = await request_github_sync_job_cancellation(
+                session,
+                workspace_id=workspace_id,
+                sync_job_id=sync_job_id,
+                requested_by=access.actor.auth_mode,
+            )
+            await session.commit()
+        except GitHubSyncJobError as exc:
+            await session.rollback()
+            if exc.detail == GITHUB_SYNC_JOB_NOT_FOUND:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail == GITHUB_SYNC_JOB_ALREADY_FINISHED:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=exc.detail,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubSyncJobRead.model_validate(sync_job)
 
 
 @router.post(
@@ -739,104 +1198,6 @@ async def run_github_local_sync(
 
 
 @router.post(
-    "/repositories/issues/sync",
-    response_model=GitHubSelectedIssueSyncResponse,
-)
-async def run_selected_repository_issue_sync(
-    workspace_id: UUID,
-    payload: GitHubSelectedIssueSyncRequest,
-    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
-) -> GitHubSelectedIssueSyncResponse:
-    async with AsyncSessionLocal() as session:
-        try:
-            result = await sync_selected_repository_issues(
-                session,
-                workspace_id=workspace_id,
-                input_payload=GitHubSelectedIssueSyncInput(
-                    connection_id=payload.connection_id,
-                    repositories=payload.repositories,
-                    states=payload.states,
-                ),
-                requested_by=access.actor.auth_mode,
-            )
-            await session.commit()
-        except GitHubSelectedIssueSyncNotFoundError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=exc.detail,
-            ) from exc
-        except GitHubSelectedIssueSyncConflictError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=exc.detail,
-            ) from exc
-        except GitHubSelectedIssueSyncProviderReadError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=exc.detail,
-            ) from exc
-        except GitHubSelectedIssueSyncError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=exc.detail,
-            ) from exc
-    return GitHubSelectedIssueSyncResponse.model_validate(result)
-
-
-@router.post(
-    "/repositories/pull-requests/sync",
-    response_model=GitHubSelectedPullRequestSyncResponse,
-)
-async def run_selected_repository_pull_request_sync(
-    workspace_id: UUID,
-    payload: GitHubSelectedPullRequestSyncRequest,
-    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
-) -> GitHubSelectedPullRequestSyncResponse:
-    async with AsyncSessionLocal() as session:
-        try:
-            result = await sync_selected_repository_pull_requests(
-                session,
-                workspace_id=workspace_id,
-                input_payload=GitHubSelectedPRSyncInput(
-                    connection_id=payload.connection_id,
-                    repositories=payload.repositories,
-                    states=payload.states,
-                ),
-                requested_by=access.actor.auth_mode,
-            )
-            await session.commit()
-        except GitHubSelectedPRSyncNotFoundError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=exc.detail,
-            ) from exc
-        except GitHubSelectedPRSyncConflictError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=exc.detail,
-            ) from exc
-        except GitHubSelectedPRSyncProviderReadError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=exc.detail,
-            ) from exc
-        except GitHubSelectedPRSyncError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=exc.detail,
-            ) from exc
-    return GitHubSelectedPullRequestSyncResponse.model_validate(result)
-
-
-@router.post(
     "/sync-jobs/{sync_job_id}/normalize-local",
     response_model=GitHubNormalizationResponse,
 )
@@ -962,4 +1323,61 @@ async def list_github_repositories(
         source=result.source,
         is_live=result.is_live,
         warnings=result.warnings,
+    )
+
+
+def _github_setup_actor_user_id(access: WorkspaceAccess) -> UUID:
+    user_id = access.actor.user_id
+    if access.actor.is_operator or user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="browser session required for GitHub App setup",
+        )
+    return user_id
+
+
+def _raise_github_setup_http_error(exc: GitHubAppSetupError) -> None:
+    conflict_codes = {
+        "github_app_already_connected",
+        "github_app_already_created",
+        "github_app_installation_already_bound",
+        "github_app_installation_not_available",
+        "github_app_installation_not_verified",
+        "github_app_setup_not_ready",
+        "repository_inventory_not_available",
+        "repository_selection_not_available",
+    }
+    if exc.code in conflict_codes:
+        http_status = status.HTTP_409_CONFLICT
+    elif exc.code == "repository_inventory_unavailable":
+        http_status = status.HTTP_502_BAD_GATEWAY
+    elif exc.code == "workspace_not_found":
+        http_status = status.HTTP_404_NOT_FOUND
+    else:
+        http_status = status.HTTP_400_BAD_REQUEST
+    raise HTTPException(status_code=http_status, detail=exc.code) from exc
+
+
+def _github_setup_return_redirect() -> RedirectResponse:
+    return RedirectResponse(
+        url="/settings/integrations/github#github-setup",
+        status_code=status.HTTP_303_SEE_OTHER,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
+def _github_provider_redirect(value: str) -> RedirectResponse:
+    parsed = urlsplit(value)
+    if parsed.scheme != "https" or parsed.netloc != "github.com":
+        return _github_setup_return_redirect()
+    return RedirectResponse(
+        url=value,
+        status_code=status.HTTP_303_SEE_OTHER,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+        },
     )

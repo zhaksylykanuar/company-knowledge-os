@@ -1,0 +1,60 @@
+{
+  "schema_version": "repository_intelligence.v1",
+  "workspace_id": "11111111-1111-4111-8111-111111111111",
+  "repository_id": "44444444-4444-4444-8444-444444444444",
+  "repository": {
+    "provider": "github",
+    "external_id": "synthetic-infrastructure-404",
+    "full_name": "synthetic-company/deployment-config",
+    "default_branch": "main",
+    "source_url": null
+  },
+  "audit_level": "L2",
+  "analysis_target": {
+    "target_status": "exact",
+    "commit_algorithm": "sha1",
+    "commit_sha": "89abcdef0123456789abcdef0123456789abcdef",
+    "metadata_snapshot_id": null
+  },
+  "profile": "infrastructure",
+  "policy_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "engine_version": "ri-contract-test-1",
+  "result": {
+    "schema_version": "repository_analyzer_result.v1",
+    "purpose": {
+      "workspace_id": "11111111-1111-4111-8111-111111111111",
+      "status": "observed",
+      "confidence": 0.94,
+      "evidence_refs": [
+        {
+          "kind": "repository_deployment",
+          "source": "github",
+          "ref": "synthetic-company/deployment-config@89abcdef0123456789abcdef0123456789abcdef:deploy/service.yaml"
+        }
+      ],
+      "contradicting_evidence_refs": [],
+      "human_resolution": {
+        "status": "pending",
+        "resolved_by_user_id": null,
+        "resolved_at": null
+      },
+      "reconciliation_status": "current",
+      "claim_id": "purpose.primary",
+      "summary": "Synthetic infrastructure configuration.",
+      "operational_summary": "Defines a synthetic deployment without accessing any real environment.",
+      "repository_type": "infrastructure"
+    },
+    "responsibilities": [],
+    "interfaces_provided": [],
+    "dependencies_consumed": [],
+    "deployment_units": [],
+    "ownership_candidates": [],
+    "relationship_candidates": [],
+    "findings": [],
+    "contradictions": [],
+    "unknowns": [],
+    "limitations": [
+      "This fixture validates the L2 envelope only; no command was executed."
+    ]
+  }
+}

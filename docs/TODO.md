@@ -1,98 +1,87 @@
 # FounderOS TODO
 
-Status: near-term backlog only. Historical completed task ledgers were removed
-from this file during the 2026-06-29 repository audit; use `PROGRESS.md`,
-`docs/CHANGELOG.md`, and git history for completed-work details.
+Только ближайшие задачи. Полный продуктовый контракт:
+`../founderOS_MASTER_PLAYBOOK.md`. Проверяемый переход:
+`AI_FOUNDEROS_ACCEPTANCE.md`.
 
-Every implementation task must follow `AGENTS.md`: short task prompt, scoped
-files, no unrelated edits, docs updated in the same task, and focused checks
-first.
+## Сейчас — Repository Intelligence
 
-## Current Checkpoint
+1. После отдельного approval начать **RI-006** persistence ADR, storage/retention
+   decisions и reviewed migration в отдельной branch/PR workflow.
 
-Implemented foundations:
+RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
+fixtures, object-shaped evidence, finite confidence, human-only resolution,
+directional relationships и contradiction validation реализованы без migration,
+persistence, UI, provider/LLM call или чтения company repositories (DEC-115).
+RI-002 завершён: workspace-scoped canonical L0 читает только `Repository` +
+active identity-matching `SourceRecord`, сохраняет unknown без evidence и не
+использует filesystem/provider fallback (DEC-116).
+RI-003 завершён: exact-SHA checkout использует внешний ephemeral runtime path,
+не выполняет target code, не наследует credentials/network и удаляет run на
+каждом exit (DEC-117).
+RI-004 завершён: bounded deterministic collector читает только synthetic RI-003
+checkout, извлекает sanitized manifests/entrypoints/dependencies/interfaces/
+deployment/tests/CI/documentation/migrations с evidence на каждый факт и не
+выполняет target code (DEC-118).
+RI-005 завершён: trusted synthetic portfolio + RI-004 facts строят directional
+observed/inferred candidates, unresolved targets, inverse views, symmetric
+normalization, cycle/orphan findings и fail-closed contradiction review без
+company read или persistence (DEC-119).
+Durable storage и migrations остаются RI-006 и требуют отдельного approval,
+branch/PR и reviewed migration.
 
-- FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
-  Alembic migrations, and one current Alembic head (`e8f9a0b1c2d3`).
-- Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
-  `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
-  `BriefingItem` foundations.
-- Email+password founder login on server-side sessions (Argon2id, httpOnly
-  first-party cookie through the same-origin Next.js proxy, DB login throttle).
-- GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
-  idempotent canonical upserts, DB-level Repository identity guards, and no
-  browser-shipped operator key.
-- Deterministic Company Brain and persisted deterministic Founder Briefings with
-  history and evidence refs. No LLM generation is currently implemented.
-- Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
-- Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
+## Сейчас — завершение FounderOS 2.0 reset
 
-## Next Priority: GitHub Product Connect / Live Sync
+1. Заново внести нужные provider credentials только через
+   `Настройки → AI` и `Настройки → Подключения`, выполнить отдельные
+   read-only проверки и не возвращать environment fallbacks.
+2. Подключить approved external error-reporting/tracing sink без payloads и
+   завершить fail-closed hosted topology/RLS gate. Локальные structured logs,
+   request IDs, counters и database readiness уже реализованы.
+3. Провести разрешённые authenticated session/workspace и desktop/mobile
+   browser gates и проверить
+   overflow, console и основные состояния.
+4. Подтвердить один read-only GitHub App read из рабочей организации с видимым
+   canonical результатом.
+5. Настроить реальное независимое backup-хранилище и отдельное хранение ключа,
+   выполнить первый encrypted export и полный restore drill. Механизм и
+   runbook реализованы, но same-machine тест не является внешним proof.
+6. В приватном GitHub проверить visibility, branch protection и private
+   security-reporting channel; файлы LICENSE/SECURITY/CONTRIBUTING/CODEOWNERS
+   уже добавлены локально.
+7. Продолжать снижать ratchet для Headquarters, ActionProposalsPanel и global
+   CSS только bounded slices с characterization конкретного поведения; broad
+   refactor запрещён DEC-110.
 
-Rationale: the workspace is mostly empty until a real data source is connected.
-Do not spend the next feature slice on an LLM briefing over fixture/empty data.
-Get real GitHub data flowing first, then add LLM narrative on top of validated,
-evidence-backed records.
+## Следом — память и настоящее второе мнение
 
-Done when:
+1. Добавить полные paginated live provider reads для Jira/Gmail/Drive, после
+   чего подключить их к `source-reconciliation.v1`. Текущие локальные импорты
+   не имеют права объявлять исчезновение.
+2. Добавить обязательства клиентов, решения и риски с evidence.
+3. Добавить contradiction detection между источниками.
+4. Расширить Memory Control v1 с внутренних документов на provider-backed
+   canonical records: exact dependency preview, evidence-safe cascade,
+   reconciliation/reimport behavior и честная provider-side deletion boundary.
 
-- GitHub connect design is recorded in `docs/DECISIONS.md` before coding.
-- GitHub App vs OAuth App choice is explicit; prefer GitHub App installation for
-  workspace-scoped repository access unless a concrete product constraint says
-  otherwise.
-- Connection state is workspace-scoped and cannot bind an installation to the
-  wrong workspace.
-- Token/secret storage model is explicit: do not persist short-lived installation
-  access tokens when they can be minted just-in-time; protect the GitHub App
-  private key/webhook secret/any user OAuth refresh token with the existing
-  secret-encryption posture.
-- Repository selection/scope is minimal and read-only by default.
-- Webhook signature verification uses the raw body and dedupes deliveries, or a
-  polling-only v0 explicitly documents why webhooks are deferred.
-- Sync writes through the existing idempotent normalization/upsert path.
-- Two-workspace isolation tests cover connection, sync, briefing, and evidence
-  dereference behavior.
-- `uv run ruff check .`, `uv run alembic upgrade head`, `uv run alembic check`,
-  `uv run pytest -q`, frontend checks if touched, and the tracked secret scan are
-  green.
+Workspace AI/privacy control, encrypted key lifecycle, provider-retention
+acknowledgement, model/budget controls и synthetic read-only connection check
+реализованы. Настоящий credentialed smoke ещё не выполнен.
 
-## Near-Term Backlog
+Memory Control v1 реализован для FounderOS-authored документов: correction
+purges prior versions, forget удаляет active row и все версии, stale preview
+fail closed. Backups остаются до retention rotation; внешний provider cascade
+ещё не реализован.
 
-1. **GitHub product connect / live sync.**
-   Build the connect flow, connection status UX, initial sync, reconciliation,
-   rate-limit handling, and observability. Keep provider writes disabled.
+## Внешний gate
 
-2. **First auth-session production deploy.**
-   Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
-   head`, smoke. Do not add auto-deploy or provider-write smoke without explicit
-   human approval.
+Один founder-approved repository-scoped read из рабочей GitHub-организации с
+видимым canonical результатом и безопасной квитанцией. До него не подключать
+новые provider-first продуктовые экраны.
 
-3. **Briefings Chunk 2: LLM narrative over real evidence.**
-   Add only after real connected data exists. LLM output must be strict JSON,
-   schema-validated, evidence-backed, and persisted only after deterministic
-   validation. LLMs must not mutate production data or call providers.
+Публичный multi-tenant hosting дополнительно заблокирован до полного RLS gate
+из DEC-102. Составные tenant FK уже обязательны, но не заменяют RLS.
 
-4. **Multi-user / teammate provisioning.**
-   Add invite/provisioning flow after single-founder auth/session behavior is
-   deployed and stable.
-
-## Known Debts / Watch List
-
-- Retained compatibility substrate (`source_events`, `normalized_activity_items`,
-  `ingested_events`) still exists; do not drop it without a scoped migration and
-  explicit approval.
-- GitHub today is not a product connect flow; provider-token/manual bridge is an
-  operator/admin bridge.
-- Deploy remains manual and smoke-gated. Do not push, deploy, run migrations on
-  production data, or call providers unless the human explicitly requests it.
-- Raw storage + Postgres are the source of truth; Obsidian is export-only.
-
-## Documentation Tasks For Future Work
-
-- Update `PROGRESS.md` after every task.
-- Add a `docs/DECISIONS.md` entry for durable architecture/security/deploy/data
-  model changes.
-- Update `docs/ROADMAP.md` only when phase-level direction changes.
-- Add user-visible or operational changes to `docs/CHANGELOG.md`.
-- Move deferred ideas to `docs/POST_MVP.md`; do not keep long completed ledgers
-  in this file.
+Disaster recovery operational readiness дополнительно заблокирован до первого
+успешного restore drill с физически независимого хранилища и отдельно
+восстановленного ключа (DEC-108).

@@ -9,7 +9,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, literal_column, or_, select, update
+from sqlalchemy import and_, func, literal_column, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +33,14 @@ from app.db.integration_models import (
     SYNC_JOB_STATUS_SUCCEEDED,
     SYNC_JOB_TYPE_MANUAL,
     SyncJob,
+)
+from app.db.memory_models import COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED
+from app.services.company_memory_event_service import (
+    append_source_record_lifecycle_memory_event,
+)
+from app.services.source_reconciliation_service import (
+    SourceReconciliationResult,
+    reconcile_authoritative_github_records,
 )
 
 GITHUB_NORMALIZATION_PROJECTION_WARNING = (
@@ -74,6 +82,10 @@ class GitHubNormalizationOptions:
     include_issues: bool = True
     include_pull_requests: bool = True
     persist_if_supported: bool = False
+    snapshot_observed_at: datetime | None = None
+    provider_attested: bool = False
+    authoritative_issue_repositories: tuple[str, ...] = ()
+    authoritative_pull_request_repositories: tuple[str, ...] = ()
 
 
 class GitHubNormalizationError(ValueError):
@@ -86,6 +98,9 @@ class GitHubNormalizationError(ValueError):
 class CanonicalGitHubPersistenceCounts:
     source_records_created: int = 0
     source_records_updated: int = 0
+    source_records_restored: int = 0
+    source_records_tombstoned: int = 0
+    source_records_stale_skipped: int = 0
     repositories_created: int = 0
     repositories_updated: int = 0
     tasks_created: int = 0
@@ -99,7 +114,12 @@ class CanonicalGitHubPersistenceCounts:
 
     @property
     def records_updated(self) -> int:
-        return self.repositories_updated + self.tasks_updated + self.pull_requests_updated
+        return (
+            self.repositories_updated
+            + self.tasks_updated
+            + self.pull_requests_updated
+            + self.source_records_tombstoned
+        )
 
 
 async def normalize_github_sync_job_local(
@@ -165,14 +185,17 @@ async def normalize_github_sync_job_local(
             for record in local_records["issues"]
             if _is_issue_record(record)
         ]
-        if not issues:
+        if not issues and not options.authoritative_issue_repositories:
             warnings.append(GITHUB_NORMALIZATION_ISSUES_UNAVAILABLE_WARNING)
     if options.include_pull_requests:
         pull_requests = [
             build_normalized_pull_request(record)
             for record in local_records["pull_requests"]
         ]
-        if not pull_requests:
+        if (
+            not pull_requests
+            and not options.authoritative_pull_request_repositories
+        ):
             warnings.append(GITHUB_NORMALIZATION_PULL_REQUESTS_UNAVAILABLE_WARNING)
 
     counts = {
@@ -181,6 +204,33 @@ async def normalize_github_sync_job_local(
         "pull_requests": len(pull_requests),
     }
     persistence_counts = CanonicalGitHubPersistenceCounts()
+    reconciliation_results: list[SourceReconciliationResult] = []
+    snapshot_observed_at = _snapshot_observed_at(
+        options.snapshot_observed_at,
+        fallback=started_at,
+    )
+    authoritative_reconciliation_requested = bool(
+        options.authoritative_issue_repositories
+        or options.authoritative_pull_request_repositories
+    )
+    if authoritative_reconciliation_requested:
+        if (
+            not options.provider_attested
+            or options.snapshot_observed_at is None
+            or not options.persist_if_supported
+            or (
+                options.authoritative_issue_repositories
+                and not options.include_issues
+            )
+            or (
+                options.authoritative_pull_request_repositories
+                and not options.include_pull_requests
+            )
+        ):
+            raise GitHubNormalizationError(
+                "authoritative reconciliation requires a complete "
+                "provider-attested persisted read"
+            )
     if options.persist_if_supported:
         persistence_counts = await _persist_canonical_github_records(
             session,
@@ -188,12 +238,48 @@ async def normalize_github_sync_job_local(
             repositories=repositories,
             issues=issues,
             pull_requests=pull_requests,
-            observed_at=started_at,
+            observed_at=snapshot_observed_at,
+            allow_restore=options.provider_attested,
+        )
+        if options.authoritative_issue_repositories:
+            reconciliation_results.append(
+                await reconcile_authoritative_github_records(
+                    session,
+                    sync_job=sync_job,
+                    record_type=SOURCE_RECORD_TYPE_ISSUE,
+                    repository_full_names=options.authoritative_issue_repositories,
+                    observed_records=issues,
+                    snapshot_observed_at=snapshot_observed_at,
+                )
+            )
+        if options.authoritative_pull_request_repositories:
+            reconciliation_results.append(
+                await reconcile_authoritative_github_records(
+                    session,
+                    sync_job=sync_job,
+                    record_type=SOURCE_RECORD_TYPE_PULL_REQUEST,
+                    repository_full_names=(
+                        options.authoritative_pull_request_repositories
+                    ),
+                    observed_records=pull_requests,
+                    snapshot_observed_at=snapshot_observed_at,
+                )
+            )
+        persistence_counts.source_records_tombstoned = sum(
+            result.records_tombstoned for result in reconciliation_results
         )
     missing_requested_data = (
         (options.include_repositories and not repositories)
-        or (options.include_issues and not issues)
-        or (options.include_pull_requests and not pull_requests)
+        or (
+            options.include_issues
+            and not issues
+            and not options.authoritative_issue_repositories
+        )
+        or (
+            options.include_pull_requests
+            and not pull_requests
+            and not options.authoritative_pull_request_repositories
+        )
     )
     sync_job.status = (
         SYNC_JOB_STATUS_PARTIAL if missing_requested_data else SYNC_JOB_STATUS_SUCCEEDED
@@ -204,10 +290,16 @@ async def normalize_github_sync_job_local(
     sync_job.records_updated = persistence_counts.records_updated
     sync_job.cursor_after = {
         "local_normalization_performed": True,
-        "provider_sync_started": False,
+        "provider_sync_started": options.provider_attested,
         "persistence_mode": persistence_mode,
         "counts": counts,
         "canonical_persistence": _persistence_counts_payload(persistence_counts),
+        "source_lifecycle": _source_lifecycle_counts_payload(
+            persistence_counts
+        ),
+        "reconciliation": [
+            result.as_payload() for result in reconciliation_results
+        ],
     }
     sync_job.logs = _append_normalization_log(
         sync_job.logs,
@@ -236,10 +328,13 @@ async def normalize_github_sync_job_local(
             "pull_requests": pull_requests,
         },
         "counts": counts,
-        "is_live": False,
-        "provider_sync_started": False,
+        "is_live": options.provider_attested,
+        "provider_sync_started": options.provider_attested,
         "local_normalization_performed": True,
         "persistence_mode": persistence_mode,
+        "reconciliation": [
+            result.as_payload() for result in reconciliation_results
+        ],
         "warnings": _dedupe_warnings(warnings),
     }
 
@@ -378,10 +473,13 @@ def _append_normalization_log(
         {
             "local_normalization": {
                 "performed": True,
-                "provider_sync_started": False,
+                "provider_sync_started": options.provider_attested,
                 "persistence_mode": persistence_mode,
                 "counts": counts,
                 **_persistence_counts_payload(persistence_counts),
+                "source_lifecycle": _source_lifecycle_counts_payload(
+                    persistence_counts
+                ),
                 "warnings": _dedupe_warnings(warnings),
                 "include_repositories": options.include_repositories,
                 "include_issues": options.include_issues,
@@ -400,12 +498,13 @@ async def _persist_canonical_github_records(
     issues: list[dict[str, Any]],
     pull_requests: list[dict[str, Any]],
     observed_at: datetime,
+    allow_restore: bool,
 ) -> CanonicalGitHubPersistenceCounts:
     counts = CanonicalGitHubPersistenceCounts()
 
     for repo in repositories:
         external_id = _repository_external_id(repo)
-        source_record, created = await _upsert_source_record(
+        source_record, created, restored, accepted = await _upsert_source_record(
             session,
             sync_job=sync_job,
             external_id=external_id,
@@ -418,12 +517,17 @@ async def _persist_canonical_github_records(
             source_url=_safe_url(repo.get("source_url")),
             source_updated_at=_parse_optional_datetime(repo.get("last_activity_at")),
             observed_at=observed_at,
+            allow_restore=allow_restore,
         )
-        _ = source_record
+        if not accepted:
+            counts.source_records_stale_skipped += 1
+            continue
         if created:
             counts.source_records_created += 1
         else:
             counts.source_records_updated += 1
+        if restored:
+            counts.source_records_restored += 1
         _, repository_created = await _upsert_repository(
             session,
             sync_job=sync_job,
@@ -438,7 +542,7 @@ async def _persist_canonical_github_records(
     for issue in issues:
         external_id = _work_item_external_id_from_normalized(issue)
         source_updated_at = _parse_optional_datetime(issue.get("updated_at_source"))
-        source_record, created = await _upsert_source_record(
+        source_record, created, restored, accepted = await _upsert_source_record(
             session,
             sync_job=sync_job,
             external_id=external_id,
@@ -451,11 +555,17 @@ async def _persist_canonical_github_records(
             source_url=_safe_url(issue.get("source_url")),
             source_updated_at=source_updated_at,
             observed_at=observed_at,
+            allow_restore=allow_restore,
         )
+        if not accepted:
+            counts.source_records_stale_skipped += 1
+            continue
         if created:
             counts.source_records_created += 1
         else:
             counts.source_records_updated += 1
+        if restored:
+            counts.source_records_restored += 1
         task_created = await _upsert_github_issue_task(
             session,
             sync_job=sync_job,
@@ -469,16 +579,9 @@ async def _persist_canonical_github_records(
             counts.tasks_updated += 1
 
     for pull_request in pull_requests:
-        repository, repository_created = await _ensure_repository_for_work_item(
-            session,
-            sync_job=sync_job,
-            record=pull_request,
-        )
-        if repository_created:
-            counts.repositories_created += 1
         external_id = _work_item_external_id_from_normalized(pull_request)
         source_updated_at = _parse_optional_datetime(pull_request.get("updated_at_source"))
-        source_record, created = await _upsert_source_record(
+        source_record, created, restored, accepted = await _upsert_source_record(
             session,
             sync_job=sync_job,
             external_id=external_id,
@@ -491,16 +594,30 @@ async def _persist_canonical_github_records(
             source_url=_safe_url(pull_request.get("source_url")),
             source_updated_at=source_updated_at,
             observed_at=observed_at,
+            allow_restore=allow_restore,
         )
+        if not accepted:
+            counts.source_records_stale_skipped += 1
+            continue
         if created:
             counts.source_records_created += 1
         else:
             counts.source_records_updated += 1
+        if restored:
+            counts.source_records_restored += 1
+        repository, repository_created = await _ensure_repository_for_work_item(
+            session,
+            sync_job=sync_job,
+            record=pull_request,
+        )
+        if repository_created:
+            counts.repositories_created += 1
         pull_request_created = await _upsert_pull_request(
             session,
             sync_job=sync_job,
             pull_request=pull_request,
             repository=repository,
+            source_record=source_record,
         )
         if pull_request_created:
             counts.pull_requests_created += 1
@@ -525,6 +642,16 @@ def _persistence_counts_payload(
     }
 
 
+def _source_lifecycle_counts_payload(
+    counts: CanonicalGitHubPersistenceCounts,
+) -> dict[str, int]:
+    return {
+        "source_records_restored": counts.source_records_restored,
+        "source_records_tombstoned": counts.source_records_tombstoned,
+        "source_records_stale_skipped": counts.source_records_stale_skipped,
+    }
+
+
 async def _upsert_source_record(
     session: AsyncSession,
     *,
@@ -535,8 +662,21 @@ async def _upsert_source_record(
     source_url: str | None,
     source_updated_at: datetime | None,
     observed_at: datetime,
-) -> tuple[SourceRecord, bool]:
+    allow_restore: bool,
+) -> tuple[SourceRecord, bool, bool, bool]:
     payload_hash = _stable_payload_hash(payload)
+    existing = await session.scalar(
+        select(SourceRecord)
+        .where(
+            SourceRecord.workspace_id == sync_job.workspace_id,
+            SourceRecord.provider == SOURCE_RECORD_PROVIDER_GITHUB,
+            SourceRecord.external_id == external_id,
+        )
+        .with_for_update()
+    )
+    was_deleted = bool(existing is not None and existing.is_deleted)
+    if existing is not None and existing.is_deleted and not allow_restore:
+        return existing, False, False, False
 
     # Idempotent, concurrency-safe upsert on the canonical SourceRecord identity
     # (workspace_id, provider, external_id), backed by the existing unique
@@ -554,8 +694,12 @@ async def _upsert_source_record(
         SourceRecord.source_updated_at: source_updated_at,
         SourceRecord.sync_job_id: sync_job.id,
         SourceRecord.is_deleted: False,
+        SourceRecord.tombstoned_at: None,
+        SourceRecord.tombstone_observed_at: None,
+        SourceRecord.tombstone_sync_job_id: None,
+        SourceRecord.tombstone_reason: None,
     }
-    statement = (
+    statement: Any = (
         pg_insert(SourceRecord)
         .values(
             {
@@ -568,14 +712,46 @@ async def _upsert_source_record(
         .on_conflict_do_update(
             constraint="uq_source_records_workspace_provider_external_id",
             set_=mutable,
+            where=and_(
+                SourceRecord.observed_at <= observed_at,
+                or_(
+                    SourceRecord.tombstone_observed_at.is_(None),
+                    SourceRecord.tombstone_observed_at <= observed_at,
+                ),
+            ),
         )
         .returning(SourceRecord.id, literal_column("(xmax = 0)"))
     )
-    row = (await session.execute(statement)).one()
+    row = (await session.execute(statement)).first()
+    if row is None:
+        if existing is None:
+            existing = await session.scalar(
+                select(SourceRecord).where(
+                    SourceRecord.workspace_id == sync_job.workspace_id,
+                    SourceRecord.provider == SOURCE_RECORD_PROVIDER_GITHUB,
+                    SourceRecord.external_id == external_id,
+                )
+            )
+        if existing is None:
+            raise GitHubNormalizationError(
+                "source record upsert was skipped without a canonical row"
+            )
+        return existing, False, False, False
     source_record = await session.get(
         SourceRecord, row[0], populate_existing=True
     )
-    return source_record, bool(row[1])
+    if source_record is None:
+        raise GitHubNormalizationError("source record upsert did not return a row")
+    restored = was_deleted and not source_record.is_deleted
+    if restored:
+        await append_source_record_lifecycle_memory_event(
+            session,
+            source_record=source_record,
+            sync_job_id=sync_job.id,
+            event_type=COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED,
+            occurred_at=observed_at,
+        )
+    return source_record, bool(row[1]), restored, True
 
 
 async def _upsert_repository(
@@ -612,7 +788,7 @@ async def _upsert_repository(
     # unique guard can catch a concurrent insert. If a conflict happened, read
     # the canonical row by either identity and update in place. This avoids an
     # IntegrityError when live polling/webhook paths race across identities.
-    statement = (
+    statement: Any = (
         pg_insert(Repository)
         .values({Repository.workspace_id: sync_job.workspace_id, **mutable})
         .on_conflict_do_nothing()
@@ -623,6 +799,10 @@ async def _upsert_repository(
         repository = await session.get(
             Repository, inserted[0], populate_existing=True
         )
+        if repository is None:
+            raise GitHubNormalizationError(
+                "repository insert did not return a canonical row"
+            )
         return repository, True
 
     existing = await session.scalar(
@@ -662,6 +842,10 @@ async def _upsert_repository(
         update(Repository).where(Repository.id == existing.id).values(update_values)
     )
     repository = await session.get(Repository, existing.id, populate_existing=True)
+    if repository is None:
+        raise GitHubNormalizationError(
+            "repository update did not return a canonical row"
+        )
     return repository, False
 
 
@@ -724,7 +908,7 @@ async def _upsert_github_issue_task(
         Task.source_updated_at: source_updated_at,
         Task.task_metadata: _task_metadata(issue),
     }
-    statement = (
+    statement: Any = (
         pg_insert(Task)
         .values(
             {
@@ -754,6 +938,7 @@ async def _upsert_pull_request(
     sync_job: SyncJob,
     pull_request: Mapping[str, Any],
     repository: Repository,
+    source_record: SourceRecord,
 ) -> bool:
     external_id = _work_item_external_id_from_normalized(pull_request)
 
@@ -764,6 +949,7 @@ async def _upsert_pull_request(
     # preserves the created/updated counters.
     mutable = {
         PullRequest.repository_id: repository.id,
+        PullRequest.source_record_id: source_record.id,
         PullRequest.number: int(pull_request.get("number") or 0),
         PullRequest.title: _safe_title(pull_request.get("title"), f"GitHub PR {external_id}"),
         PullRequest.state: _pull_request_state(pull_request),
@@ -779,7 +965,7 @@ async def _upsert_pull_request(
         ),
         PullRequest.pr_metadata: _pull_request_metadata(pull_request),
     }
-    statement = (
+    statement: Any = (
         pg_insert(PullRequest)
         .values(
             {
@@ -814,9 +1000,9 @@ def _source_record_payload(
 
 
 def _local_github_records(sync_job: SyncJob) -> dict[str, list[Mapping[str, Any]]]:
-    cursor = sync_job.cursor_before if isinstance(sync_job.cursor_before, Mapping) else {}
-    local = cursor.get("local_github") if isinstance(cursor.get("local_github"), Mapping) else {}
-    github = cursor.get("github") if isinstance(cursor.get("github"), Mapping) else {}
+    cursor = _mapping(sync_job.cursor_before)
+    local = _mapping(cursor.get("local_github"))
+    github = _mapping(cursor.get("github"))
     candidates = (local, github, cursor)
     return {
         "repositories": _first_record_list(
@@ -832,6 +1018,10 @@ def _local_github_records(sync_job: SyncJob) -> dict[str, list[Mapping[str, Any]
             "github_pull_requests",
         ),
     }
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
 
 
 def _first_record_list(
@@ -1106,6 +1296,19 @@ def _repository_full_name(repo: Mapping[str, Any]) -> str:
 def _repository_visibility(value: Any) -> str | None:
     text = _safe_text(value)
     return text if text in {"public", "private", "internal"} else None
+
+
+def _snapshot_observed_at(
+    value: datetime | None,
+    *,
+    fallback: datetime,
+) -> datetime:
+    selected = value or fallback
+    if selected.tzinfo is None:
+        raise GitHubNormalizationError(
+            "github snapshot observed_at must be timezone-aware"
+        )
+    return selected.astimezone(timezone.utc)
 
 
 def _parse_optional_datetime(value: Any) -> datetime | None:

@@ -6,6 +6,8 @@ import { fetchCompanyBrain } from "../lib/api";
 import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
+  CompanyBrainDriveFile,
+  CompanyBrainMessage,
   CompanyBrainRepository,
   CompanyBrainResponse,
   CompanyBrainSourceRef,
@@ -38,6 +40,8 @@ export function CompanyBrainPanel({ refreshSignal = 0 }: CompanyBrainPanelProps)
   const [status, setStatus] = useState<PanelStatus>("loading");
 
   useEffect(() => {
+    void refreshSignal;
+    void reloadKey;
     if (!workspaceId) {
       setData(null);
       setError(null);
@@ -166,6 +170,8 @@ export function CompanyBrainPanelView({
               items={data.work.recent}
               title={M.companyBrain.recentSection}
             />
+            <MessagesSection messages={data.communications?.messages ?? []} />
+            <DriveFilesSection files={data.documents?.files ?? []} />
           </section>
           <EvidenceSection evidence={data.evidence} />
           <CapabilityNote data={data} />
@@ -243,8 +249,12 @@ function BrainWorkSection({
             </div>
             <dl className="work-meta">
               <div>
-                <dt>{M.companyBrain.metaRepository}</dt>
-                <dd>{item.repository_full_name ?? M.companyBrain.unknownRepository}</dd>
+                <dt>{M.companyBrain.metaProvider}</dt>
+                <dd>{item.source_provider ?? M.common.unknown}</dd>
+              </div>
+              <div>
+                <dt>{M.companyBrain.metaScope}</dt>
+                <dd>{workItemScope(item)}</dd>
               </div>
               <div>
                 <dt>{M.companyBrain.metaState}</dt>
@@ -258,6 +268,90 @@ function BrainWorkSection({
             <SourceRefList refs={item.source_refs} />
             {item.source_url ? (
               <SourceLink url={item.source_url}>{M.common.openSource}</SourceLink>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function workItemScope(item: CompanyBrainWorkItem): string {
+  return (
+    item.repository_full_name ??
+    item.project_key ??
+    item.repository_external_id ??
+    M.companyBrain.unknownRepository
+  );
+}
+
+function MessagesSection({ messages }: { messages: CompanyBrainMessage[] }) {
+  return (
+    <section className="work-section" aria-label={M.companyBrain.messagesSection}>
+      <h3>{M.companyBrain.messagesSection}</h3>
+      {messages.length === 0 ? <p className="muted">{M.companyBrain.noMessages}</p> : null}
+      <div className="work-list">
+        {messages.map((message) => (
+          <article className="work-item" key={message.source_record_id}>
+            <div className="work-item-main">
+              <span className="badge">{message.unread ? M.companyBrain.badgeUnread : M.companyBrain.badgeMessage}</span>
+              <h4>{message.subject}</h4>
+            </div>
+            {message.snippet ? <p className="muted">{message.snippet}</p> : null}
+            <dl className="work-meta">
+              <div>
+                <dt>{M.companyBrain.metaFrom}</dt>
+                <dd>{message.from_address ?? M.common.unknown}</dd>
+              </div>
+              <div>
+                <dt>{M.companyBrain.metaLabels}</dt>
+                <dd>{message.labels.length > 0 ? message.labels.join(", ") : M.common.none}</dd>
+              </div>
+              <div>
+                <dt>{M.companyBrain.metaReference}</dt>
+                <dd>{message.message_id}</dd>
+              </div>
+            </dl>
+            <SourceRefList refs={message.source_refs} />
+            {message.source_url ? (
+              <SourceLink url={message.source_url}>{M.common.openSource}</SourceLink>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DriveFilesSection({ files }: { files: CompanyBrainDriveFile[] }) {
+  return (
+    <section className="work-section" aria-label={M.companyBrain.filesSection}>
+      <h3>{M.companyBrain.filesSection}</h3>
+      {files.length === 0 ? <p className="muted">{M.companyBrain.noFiles}</p> : null}
+      <div className="work-list">
+        {files.map((file) => (
+          <article className="work-item" key={file.source_record_id}>
+            <div className="work-item-main">
+              <span className="badge">{file.shared ? M.companyBrain.badgeSharedFile : M.companyBrain.badgeFile}</span>
+              <h4>{file.name}</h4>
+            </div>
+            <dl className="work-meta">
+              <div>
+                <dt>{M.companyBrain.metaMimeType}</dt>
+                <dd>{file.mime_type ?? M.common.none}</dd>
+              </div>
+              <div>
+                <dt>{M.companyBrain.metaOwner}</dt>
+                <dd>{file.owners.length > 0 ? file.owners.join(", ") : M.common.unknown}</dd>
+              </div>
+              <div>
+                <dt>{M.companyBrain.metaReference}</dt>
+                <dd>{file.file_id}</dd>
+              </div>
+            </dl>
+            <SourceRefList refs={file.source_refs} />
+            {file.source_url ? (
+              <SourceLink url={file.source_url}>{M.common.openSource}</SourceLink>
             ) : null}
           </article>
         ))}
@@ -316,7 +410,9 @@ function hasCompanyBrainData(data: CompanyBrainResponse): boolean {
       data.summary.open_issues +
       data.summary.open_pull_requests +
       data.summary.closed_issues +
-      data.summary.merged_pull_requests >
+      data.summary.merged_pull_requests +
+      (data.communications?.messages.length ?? 0) +
+      (data.documents?.files.length ?? 0) >
     0
   );
 }

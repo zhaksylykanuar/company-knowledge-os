@@ -26,6 +26,7 @@ from app.db.integration_models import (
     INTEGRATION_CONNECTION_STATUS_REVOKED,
     INTEGRATION_PROVIDER_GITHUB,
     INTEGRATION_PROVIDER_JIRA,
+    SYNC_JOB_STATUS_CANCELLED,
     SYNC_JOB_STATUS_QUEUED,
     SYNC_JOB_TYPE_MANUAL,
     IntegrationConnection,
@@ -641,7 +642,89 @@ async def test_viewer_can_read_github_sync_jobs(monkeypatch) -> None:
         await _cleanup_sync_fixture(marker)
 
 
-def test_github_sync_job_api_does_not_create_migration_file() -> None:
+async def test_owner_can_cancel_sync_job_and_repeat_is_rejected(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_sync_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        connection_id = await _seed_connection(created["workspace"]["id"])
+        sync_job_id = await _seed_sync_job(
+            created["workspace"]["id"],
+            connection_id,
+        )
+        path = (
+            f"/api/v1/workspaces/{created['workspace']['id']}"
+            f"/github/sync-jobs/{sync_job_id}/cancel"
+        )
+
+        async with _async_client() as client:
+            cancelled = await client.post(
+                path,
+                headers=_headers(),
+                params={
+                    "owner_email": _bootstrap_payload(marker)["owner_email"]
+                },
+            )
+            repeated = await client.post(
+                path,
+                headers=_headers(),
+                params={
+                    "owner_email": _bootstrap_payload(marker)["owner_email"]
+                },
+            )
+
+        assert cancelled.status_code == 200
+        assert cancelled.json()["status"] == SYNC_JOB_STATUS_CANCELLED
+        assert cancelled.json()["cancel_requested_at"] is not None
+        assert repeated.status_code == 409
+        stored = await _stored_sync_job(str(sync_job_id))
+        assert stored.status == SYNC_JOB_STATUS_CANCELLED
+        assert stored.lease_owner is None
+    finally:
+        await _cleanup_sync_fixture(marker)
+
+
+async def test_viewer_cannot_cancel_sync_job(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_sync_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        viewer_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=MEMBERSHIP_ROLE_VIEWER,
+            suffix="viewer-cancel",
+        )
+        connection_id = await _seed_connection(created["workspace"]["id"])
+        sync_job_id = await _seed_sync_job(
+            created["workspace"]["id"],
+            connection_id,
+        )
+
+        async with _async_client() as client:
+            response = await client.post(
+                (
+                    f"/api/v1/workspaces/{created['workspace']['id']}"
+                    f"/github/sync-jobs/{sync_job_id}/cancel"
+                ),
+                headers=_headers(),
+                params={"owner_email": viewer_email},
+            )
+
+        assert response.status_code == 403
+        stored = await _stored_sync_job(str(sync_job_id))
+        assert stored.status == SYNC_JOB_STATUS_QUEUED
+    finally:
+        await _cleanup_sync_fixture(marker)
+
+
+def test_durable_github_sync_job_migration_is_checked_in() -> None:
     version_files = {path.name for path in Path("migrations/versions").glob("*.py")}
-    assert not any("github_sync_job" in name for name in version_files)
-    assert not any("manual_sync_job" in name for name in version_files)
+    assert (
+        "c4d5e6f7a8b9_add_durable_sync_job_leases.py"
+        in version_files
+    )

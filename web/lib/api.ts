@@ -1,30 +1,83 @@
 import type {
+  ActionProposal,
   ActionExecutionPreviewResponse,
+  ActionExecutionResultSyncRequest,
+  ActionExecutionResultSyncResponse,
   ActionExecutionResponse,
   ActionProposalAuditResponse,
   ActionProposalExecuteRequest,
+  ActionProposalBulkRejectRequest,
+  ActionProposalBulkRequest,
+  ActionProposalBulkResponse,
   ActionProposalCreateRequest,
+  ActionProposalDecisionResponse,
+  ActionProposalDecisionRequest,
   ActionProposalListRequest,
   ActionProposalListResponse,
   ActionProposalMutationResponse,
   ActionProposalRejectRequest,
+  AISettings,
+  AISettingsApplyRequest,
+  AISettingsCheckReceipt,
   ApiErrorPayload,
   ApiFetchOptions,
+  BriefingActionProposalGenerationResponse,
   BriefingListResponse,
+  CompanyMapResolutionReceipt,
+  CompanyMapResolutionRequest,
+  CompanyMapResponse,
   CompanyBrainResponse,
   FounderBriefingRequest,
   FounderBriefingResponse,
+  GitHubAppInstallSetupResponse,
+  GitHubAppLiveSyncRequest,
+  GitHubAppLiveSyncResponse,
+  GitHubAppManifestSetupRequest,
+  GitHubAppManifestSetupResponse,
+  GitHubAppRepositorySelectionRequest,
+  GitHubAppRepositorySelectionResponse,
+  GitHubAppSetupRestartResponse,
+  GitHubAppSetupStatus,
   GitHubConnectionStatusResponse,
-  GitHubLocalSyncRequest,
-  GitHubLocalSyncResponse,
   GitHubOperationalWorkResponse,
   GitHubOperationalWorkState,
-  GitHubSelectedIssueSyncRequest,
-  GitHubSelectedIssueSyncResponse,
-  GitHubSelectedPullRequestSyncRequest,
-  GitHubSelectedPullRequestSyncResponse,
-  GitHubSelectedRepositorySyncResult
+  GitHubRepositoryListResponse,
+  GitHubSyncJobRead,
+  NormalizedEntitiesResponse,
+  DocumentCreateRequest,
+  DocumentListRequest,
+  DocumentListResponse,
+  DocumentMemoryCorrectionRequest,
+  DocumentMemoryCorrectionResponse,
+  DocumentMemoryForgetRequest,
+  DocumentMemoryForgetResponse,
+  DocumentMemoryPreview,
+  DocumentResponse,
+  DocumentUpdateRequest,
+  DocumentVersionsResponse,
+  ConnectorCheckReceipt,
+  ConnectorConfigurationApplyRequest,
+  ConnectorControl,
+  ConnectorControlCenterResponse,
+  ConnectorProvider,
+  ConnectorRegistryResponse,
+  WorkspaceMemberProvisionRequest,
+  WorkspaceMemberProvisionResponse,
+  WorkspaceMembersResponse
 } from "./types";
+import {
+  parseCompanyMemoryCheckpointResponse,
+  parseHeadquartersOnboardingDetailResponse,
+  parseHeadquartersSnapshotResponse,
+  type CompanyMemoryCheckpointResponse,
+  type HeadquartersOnboardingDetailResponse,
+  type HeadquartersSnapshotResponse
+} from "./headquarters";
+import {
+  parseAssistantQueryResponse,
+  type AssistantQueryRequest,
+  type AssistantQueryResponse
+} from "./assistant";
 
 // Same-origin base: the browser calls the web origin, and next.config.mjs
 // proxies /api/* to the backend, keeping the session cookie first-party.
@@ -46,6 +99,16 @@ async function readError(response: Response): Promise<string> {
     return payload.detail || payload.message || fallback;
   } catch {
     return fallback;
+  }
+}
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
   }
 }
 
@@ -73,7 +136,7 @@ export async function apiFetch<TResponse>(
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw new ApiRequestError(await readError(response), response.status);
   }
 
   if (response.status === 204) {
@@ -115,6 +178,114 @@ export function buildWorkspaceCompanyBrainPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-brain`;
 }
 
+export function buildWorkspaceCompanyMapPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-map`;
+}
+
+export function buildWorkspaceHeadquartersPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/headquarters`;
+}
+
+export function buildWorkspaceHeadquartersOnboardingPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceHeadquartersPath(workspaceId)}/onboarding`;
+}
+
+export function buildWorkspaceHeadquartersCheckpointPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceHeadquartersPath(workspaceId)}/changes/checkpoint`;
+}
+
+export async function fetchHeadquarters(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<HeadquartersSnapshotResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceHeadquartersPath(workspaceId),
+    options
+  );
+  return parseHeadquartersSnapshotResponse(payload);
+}
+
+export async function fetchHeadquartersOnboarding(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<HeadquartersOnboardingDetailResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceHeadquartersOnboardingPath(workspaceId),
+    options
+  );
+  return parseHeadquartersOnboardingDetailResponse(payload);
+}
+
+export async function acknowledgeHeadquartersChanges(
+  workspaceId: string,
+  expectedSnapshotId: string,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMemoryCheckpointResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceHeadquartersCheckpointPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({ expected_snapshot_id: expectedSnapshotId }),
+      method: "POST"
+    }
+  );
+  return parseCompanyMemoryCheckpointResponse(payload);
+}
+
+export function buildWorkspaceAssistantQueryPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/assistant/query`;
+}
+
+export async function queryWorkspaceAssistant(
+  workspaceId: string,
+  request: AssistantQueryRequest,
+  options: ApiFetchOptions = {}
+): Promise<AssistantQueryResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceAssistantQueryPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+  return parseAssistantQueryResponse(payload);
+}
+
+export function buildWorkspaceCompanyMapResolutionsPath(workspaceId: string): string {
+  return `${buildWorkspaceCompanyMapPath(workspaceId)}/resolutions`;
+}
+
+export async function fetchCompanyMap(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMapResponse> {
+  return apiFetch<CompanyMapResponse>(buildWorkspaceCompanyMapPath(workspaceId), options);
+}
+
+export async function resolveCompanyMapCandidate(
+  workspaceId: string,
+  request: CompanyMapResolutionRequest,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMapResolutionReceipt> {
+  return apiFetch<CompanyMapResolutionReceipt>(
+    buildWorkspaceCompanyMapResolutionsPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export function buildWorkspaceCompanyBrainEntitiesPath(workspaceId: string): string {
+  return `${buildWorkspaceCompanyBrainPath(workspaceId)}/entities`;
+}
+
 export async function fetchCompanyBrain(
   workspaceId: string,
   options: ApiFetchOptions = {}
@@ -122,6 +293,350 @@ export async function fetchCompanyBrain(
   return apiFetch<CompanyBrainResponse>(
     buildWorkspaceCompanyBrainPath(workspaceId),
     options
+  );
+}
+
+export async function fetchCompanyBrainEntities(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<NormalizedEntitiesResponse> {
+  return apiFetch<NormalizedEntitiesResponse>(
+    buildWorkspaceCompanyBrainEntitiesPath(workspaceId),
+    options
+  );
+}
+
+export function buildWorkspaceMembersPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/members`;
+}
+
+export function buildWorkspaceConnectorsPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/connectors`;
+}
+
+export async function fetchWorkspaceConnectors(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorRegistryResponse> {
+  return apiFetch<ConnectorRegistryResponse>(
+    buildWorkspaceConnectorsPath(workspaceId),
+    options
+  );
+}
+
+export function buildWorkspaceConnectorControlCenterPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceConnectorsPath(workspaceId)}/control-center`;
+}
+
+export function buildWorkspaceConnectorConfigurationPath(
+  workspaceId: string,
+  provider: ConnectorProvider
+): string {
+  return `${buildWorkspaceConnectorsPath(workspaceId)}/${encodeURIComponent(
+    provider
+  )}/configuration`;
+}
+
+export function buildWorkspaceConnectorCheckPath(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  capability: "read" | "write"
+): string {
+  return `${buildWorkspaceConnectorsPath(workspaceId)}/${encodeURIComponent(
+    provider
+  )}/checks/${capability}`;
+}
+
+export async function fetchConnectorControlCenter(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorControlCenterResponse> {
+  return apiFetch<ConnectorControlCenterResponse>(
+    buildWorkspaceConnectorControlCenterPath(workspaceId),
+    options
+  );
+}
+
+export async function applyConnectorConfiguration(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  request: ConnectorConfigurationApplyRequest,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorControl> {
+  return apiFetch<ConnectorControl>(
+    buildWorkspaceConnectorConfigurationPath(workspaceId, provider),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export async function disconnectConnectorConfiguration(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorControl> {
+  return apiFetch<ConnectorControl>(
+    buildWorkspaceConnectorConfigurationPath(workspaceId, provider),
+    { ...options, method: "DELETE" }
+  );
+}
+
+export async function checkConnectorReadAccess(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorCheckReceipt> {
+  return apiFetch<ConnectorCheckReceipt>(
+    buildWorkspaceConnectorCheckPath(workspaceId, provider, "read"),
+    { ...options, method: "POST" }
+  );
+}
+
+export async function checkConnectorWriteReadiness(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorCheckReceipt> {
+  return apiFetch<ConnectorCheckReceipt>(
+    buildWorkspaceConnectorCheckPath(workspaceId, provider, "write"),
+    { ...options, method: "POST" }
+  );
+}
+
+export function buildWorkspaceAISettingsPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/ai-settings`;
+}
+
+export async function fetchWorkspaceAISettings(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<AISettings> {
+  return apiFetch<AISettings>(buildWorkspaceAISettingsPath(workspaceId), options);
+}
+
+export async function applyWorkspaceAISettings(
+  workspaceId: string,
+  request: AISettingsApplyRequest,
+  options: ApiFetchOptions = {}
+): Promise<AISettings> {
+  return apiFetch<AISettings>(
+    `${buildWorkspaceAISettingsPath(workspaceId)}/configuration`,
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export async function removeWorkspaceAICredential(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<AISettings> {
+  return apiFetch<AISettings>(
+    `${buildWorkspaceAISettingsPath(workspaceId)}/configuration`,
+    { ...options, method: "DELETE" }
+  );
+}
+
+export async function checkWorkspaceAIConnection(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<AISettingsCheckReceipt> {
+  return apiFetch<AISettingsCheckReceipt>(
+    `${buildWorkspaceAISettingsPath(workspaceId)}/check`,
+    { ...options, method: "POST" }
+  );
+}
+
+export async function fetchWorkspaceMembers(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<WorkspaceMembersResponse> {
+  return apiFetch<WorkspaceMembersResponse>(
+    buildWorkspaceMembersPath(workspaceId),
+    options
+  );
+}
+
+export async function provisionWorkspaceMember(
+  workspaceId: string,
+  request: WorkspaceMemberProvisionRequest,
+  options: ApiFetchOptions = {}
+): Promise<WorkspaceMemberProvisionResponse> {
+  return apiFetch<WorkspaceMemberProvisionResponse>(
+    buildWorkspaceMembersPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        email: request.email,
+        name: request.name || null,
+        role: request.role
+      }),
+      method: "POST"
+    }
+  );
+}
+
+
+export function buildWorkspaceDocumentsPath(
+  workspaceId: string,
+  request: DocumentListRequest = {}
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(request.limit ?? 50));
+  if (request.status) {
+    params.set("status", request.status);
+  }
+  if (request.search) {
+    params.set("search", request.search);
+  }
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/documents?${params.toString()}`;
+}
+
+export function buildWorkspaceDocumentsCollectionPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/documents`;
+}
+
+export function buildWorkspaceDocumentPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/documents/${encodeURIComponent(documentId)}`;
+}
+
+export function buildWorkspaceDocumentVersionsPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `${buildWorkspaceDocumentPath(workspaceId, documentId)}/versions`;
+}
+
+export async function fetchDocuments(
+  workspaceId: string,
+  request: DocumentListRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<DocumentListResponse> {
+  return apiFetch<DocumentListResponse>(
+    buildWorkspaceDocumentsPath(workspaceId, request),
+    options
+  );
+}
+
+export async function fetchDocument(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function fetchDocumentVersions(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<DocumentVersionsResponse> {
+  return apiFetch<DocumentVersionsResponse>(
+    buildWorkspaceDocumentVersionsPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function createDocument(
+  workspaceId: string,
+  request: DocumentCreateRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentsCollectionPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        title: request.title,
+        body_markdown: request.body_markdown ?? "",
+        tags: request.tags ?? [],
+        status: request.status ?? "draft"
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function updateDocument(
+  workspaceId: string,
+  documentId: string,
+  request: DocumentUpdateRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentPath(workspaceId, documentId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "PATCH"
+    }
+  );
+}
+
+export function buildWorkspaceDocumentMemoryPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `${buildWorkspaceDocumentPath(workspaceId, documentId)}/memory`;
+}
+
+export async function fetchDocumentMemoryPreview(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<DocumentMemoryPreview> {
+  return apiFetch<DocumentMemoryPreview>(
+    buildWorkspaceDocumentMemoryPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function correctDocumentMemory(
+  workspaceId: string,
+  documentId: string,
+  request: DocumentMemoryCorrectionRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentMemoryCorrectionResponse> {
+  return apiFetch<DocumentMemoryCorrectionResponse>(
+    `${buildWorkspaceDocumentMemoryPath(workspaceId, documentId)}/correct`,
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export async function forgetDocumentMemory(
+  workspaceId: string,
+  documentId: string,
+  request: DocumentMemoryForgetRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentMemoryForgetResponse> {
+  return apiFetch<DocumentMemoryForgetResponse>(
+    `${buildWorkspaceDocumentMemoryPath(workspaceId, documentId)}/forget`,
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
   );
 }
 
@@ -172,6 +687,13 @@ export function buildWorkspaceBriefingPath(
   )}/briefings/${encodeURIComponent(briefingId)}`;
 }
 
+export function buildWorkspaceBriefingActionProposalsPath(
+  workspaceId: string,
+  briefingId: string
+): string {
+  return `${buildWorkspaceBriefingPath(workspaceId, briefingId)}/action-proposals`;
+}
+
 export async function listBriefings(
   workspaceId: string,
   request: { limit?: number; offset?: number } = {},
@@ -191,6 +713,20 @@ export async function getBriefing(
   return apiFetch<FounderBriefingResponse>(
     buildWorkspaceBriefingPath(workspaceId, briefingId),
     options
+  );
+}
+
+export async function generateBriefingActionProposals(
+  workspaceId: string,
+  briefingId: string,
+  options: ApiFetchOptions = {}
+): Promise<BriefingActionProposalGenerationResponse> {
+  return apiFetch<BriefingActionProposalGenerationResponse>(
+    buildWorkspaceBriefingActionProposalsPath(workspaceId, briefingId),
+    {
+      ...options,
+      method: "POST"
+    }
   );
 }
 
@@ -241,6 +777,16 @@ export function buildWorkspaceActionProposalRejectPath(
   return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/reject`;
 }
 
+export function buildWorkspaceActionProposalBulkApprovePath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-approve`;
+}
+
+export function buildWorkspaceActionProposalBulkRejectPath(workspaceId: string): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-reject`;
+}
+
 export function buildWorkspaceActionProposalExecutionPreviewPath(
   workspaceId: string,
   proposalId: string
@@ -265,6 +811,16 @@ export function buildWorkspaceActionProposalExecutePath(
   return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/execute`;
 }
 
+export function buildWorkspaceActionProposalExecutionResultSyncPath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `${buildWorkspaceActionProposalPath(
+    workspaceId,
+    proposalId
+  )}/sync-execution-result`;
+}
+
 export async function fetchActionProposals(
   workspaceId: string,
   request: ActionProposalListRequest = {},
@@ -272,6 +828,17 @@ export async function fetchActionProposals(
 ): Promise<ActionProposalListResponse> {
   return apiFetch<ActionProposalListResponse>(
     buildWorkspaceActionProposalsPath(workspaceId, request),
+    options
+  );
+}
+
+export async function fetchActionProposal(
+  workspaceId: string,
+  proposalId: string,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposal> {
+  return apiFetch<ActionProposal>(
+    buildWorkspaceActionProposalPath(workspaceId, proposalId),
     options
   );
 }
@@ -303,12 +870,18 @@ export async function createActionProposal(
 export async function approveActionProposal(
   workspaceId: string,
   proposalId: string,
+  request: ActionProposalDecisionRequest,
   options: ApiFetchOptions = {}
-): Promise<ActionProposalMutationResponse> {
-  return apiFetch<ActionProposalMutationResponse>(
+): Promise<ActionProposalDecisionResponse> {
+  return apiFetch<ActionProposalDecisionResponse>(
     buildWorkspaceActionProposalApprovePath(workspaceId, proposalId),
     {
       ...options,
+      body: JSON.stringify({
+        expected_snapshot_id: request.expected_snapshot_id ?? null,
+        idempotency_key: request.idempotency_key,
+        proposal_version: request.proposal_version
+      }),
       method: "POST"
     }
   );
@@ -317,14 +890,62 @@ export async function approveActionProposal(
 export async function rejectActionProposal(
   workspaceId: string,
   proposalId: string,
-  request: ActionProposalRejectRequest = {},
+  request: ActionProposalRejectRequest,
   options: ApiFetchOptions = {}
-): Promise<ActionProposalMutationResponse> {
-  return apiFetch<ActionProposalMutationResponse>(
+): Promise<ActionProposalDecisionResponse> {
+  return apiFetch<ActionProposalDecisionResponse>(
     buildWorkspaceActionProposalRejectPath(workspaceId, proposalId),
     {
       ...options,
       body: JSON.stringify({
+        expected_snapshot_id: request.expected_snapshot_id ?? null,
+        idempotency_key: request.idempotency_key,
+        proposal_version: request.proposal_version,
+        reason: request.reason ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function bulkApproveActionProposals(
+  workspaceId: string,
+  request: ActionProposalBulkRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalBulkResponse> {
+  return apiFetch<ActionProposalBulkResponse>(
+    buildWorkspaceActionProposalBulkApprovePath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        decisions: request.decisions.map((decision) => ({
+          expected_snapshot_id: decision.expected_snapshot_id ?? null,
+          idempotency_key: decision.idempotency_key,
+          proposal_id: decision.proposal_id,
+          proposal_version: decision.proposal_version
+        }))
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function bulkRejectActionProposals(
+  workspaceId: string,
+  request: ActionProposalBulkRejectRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalBulkResponse> {
+  return apiFetch<ActionProposalBulkResponse>(
+    buildWorkspaceActionProposalBulkRejectPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        decisions: request.decisions.map((decision) => ({
+          expected_snapshot_id: decision.expected_snapshot_id ?? null,
+          idempotency_key: decision.idempotency_key,
+          proposal_id: decision.proposal_id,
+          proposal_version: decision.proposal_version
+        })),
         reason: request.reason ?? null
       }),
       method: "POST"
@@ -367,7 +988,25 @@ export async function executeActionProposal(
       body: JSON.stringify({
         connection_id: request.connection_id,
         confirm_external_write: request.confirm_external_write,
-        idempotency_key: request.idempotency_key ?? null
+        idempotency_key: request.idempotency_key
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function syncActionProposalExecutionResult(
+  workspaceId: string,
+  proposalId: string,
+  request: ActionExecutionResultSyncRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<ActionExecutionResultSyncResponse> {
+  return apiFetch<ActionExecutionResultSyncResponse>(
+    buildWorkspaceActionProposalExecutionResultSyncPath(workspaceId, proposalId),
+    {
+      ...options,
+      body: JSON.stringify({
+        connection_id: request.connection_id ?? null
       }),
       method: "POST"
     }
@@ -390,59 +1029,64 @@ export async function fetchGitHubConnectionStatus(
   );
 }
 
-export function buildWorkspaceGitHubLocalSyncPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/github/local-sync`;
+export function buildWorkspaceGitHubAppSetupPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/github/app-setup`;
 }
 
-export async function runGitHubLocalSync(
+export function buildWorkspaceGitHubAppSetupManifestPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/manifest`;
+}
+
+export function buildWorkspaceGitHubAppSetupInstallPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/install`;
+}
+
+export function buildWorkspaceGitHubAppSetupRepositoriesPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/repositories`;
+}
+
+export function buildWorkspaceGitHubAppSetupRepositoriesRefreshPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupRepositoriesPath(workspaceId)}/refresh`;
+}
+
+export function buildWorkspaceGitHubAppSetupRestartPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/restart`;
+}
+
+export async function fetchGitHubAppSetupStatus(
   workspaceId: string,
-  request: GitHubLocalSyncRequest = {},
   options: ApiFetchOptions = {}
-): Promise<GitHubLocalSyncResponse> {
-  return apiFetch<GitHubLocalSyncResponse>(
-    buildWorkspaceGitHubLocalSyncPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify({
-        include_repositories: request.include_repositories ?? true,
-        include_issues: request.include_issues ?? true,
-        include_pull_requests: request.include_pull_requests ?? true
-      }),
-      method: "POST"
-    }
+): Promise<GitHubAppSetupStatus> {
+  return apiFetch<GitHubAppSetupStatus>(
+    buildWorkspaceGitHubAppSetupPath(workspaceId),
+    options
   );
 }
 
-export function buildWorkspaceGitHubSelectedIssueSyncPath(
-  workspaceId: string
-): string {
-  return `/api/v1/workspaces/${encodeURIComponent(
-    workspaceId
-  )}/github/repositories/issues/sync`;
-}
-
-export function buildWorkspaceGitHubSelectedPullRequestSyncPath(
-  workspaceId: string
-): string {
-  return `/api/v1/workspaces/${encodeURIComponent(
-    workspaceId
-  )}/github/repositories/pull-requests/sync`;
-}
-
-export async function syncSelectedRepositoryIssues(
+export async function beginGitHubAppManifestSetup(
   workspaceId: string,
-  request: GitHubSelectedIssueSyncRequest,
+  request: GitHubAppManifestSetupRequest,
   options: ApiFetchOptions = {}
-): Promise<GitHubSelectedIssueSyncResponse> {
-  const body: Record<string, unknown> = {
-    connection_id: request.connection_id,
-    repositories: request.repositories
+): Promise<GitHubAppManifestSetupResponse> {
+  const body: GitHubAppManifestSetupRequest = {
+    app_origin: request.app_origin,
+    owner_type: request.owner_type
   };
-  if (request.states && request.states.length > 0) {
-    body.states = request.states;
+  if (request.owner_type === "organization" && request.organization_login) {
+    body.organization_login = request.organization_login;
   }
-  return apiFetch<GitHubSelectedIssueSyncResponse>(
-    buildWorkspaceGitHubSelectedIssueSyncPath(workspaceId),
+  return apiFetch<GitHubAppManifestSetupResponse>(
+    buildWorkspaceGitHubAppSetupManifestPath(workspaceId),
     {
       ...options,
       body: JSON.stringify(body),
@@ -451,20 +1095,97 @@ export async function syncSelectedRepositoryIssues(
   );
 }
 
-export async function syncSelectedRepositoryPullRequests(
+export async function beginGitHubAppInstallSetup(
   workspaceId: string,
-  request: GitHubSelectedPullRequestSyncRequest,
   options: ApiFetchOptions = {}
-): Promise<GitHubSelectedPullRequestSyncResponse> {
+): Promise<GitHubAppInstallSetupResponse> {
+  return apiFetch<GitHubAppInstallSetupResponse>(
+    buildWorkspaceGitHubAppSetupInstallPath(workspaceId),
+    { ...options, method: "POST" }
+  );
+}
+
+export async function selectGitHubAppRepositories(
+  workspaceId: string,
+  request: GitHubAppRepositorySelectionRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppRepositorySelectionResponse> {
+  return apiFetch<GitHubAppRepositorySelectionResponse>(
+    buildWorkspaceGitHubAppSetupRepositoriesPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({ repositories: request.repositories }),
+      method: "POST"
+    }
+  );
+}
+
+export async function refreshGitHubAppSetupRepositories(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppSetupStatus> {
+  return apiFetch<GitHubAppSetupStatus>(
+    buildWorkspaceGitHubAppSetupRepositoriesRefreshPath(workspaceId),
+    { ...options, method: "POST" }
+  );
+}
+
+export async function restartGitHubAppSetup(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppSetupRestartResponse> {
+  return apiFetch<GitHubAppSetupRestartResponse>(
+    buildWorkspaceGitHubAppSetupRestartPath(workspaceId),
+    { ...options, method: "POST" }
+  );
+}
+
+export function buildWorkspaceGitHubRepositoriesPath(
+  workspaceId: string,
+  limit = 100
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/repositories?${params.toString()}`;
+}
+
+export async function fetchGitHubRepositories(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubRepositoryListResponse> {
+  return apiFetch<GitHubRepositoryListResponse>(
+    buildWorkspaceGitHubRepositoriesPath(workspaceId),
+    options
+  );
+}
+
+export function buildWorkspaceGitHubAppLiveSyncPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/connections/app-installation/sync`;
+}
+
+export async function runGitHubAppLiveSync(
+  workspaceId: string,
+  request: GitHubAppLiveSyncRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppLiveSyncResponse> {
   const body: Record<string, unknown> = {
     connection_id: request.connection_id,
-    repositories: request.repositories
+    repositories: request.repositories,
+    include_issues: request.include_issues ?? true,
+    include_pull_requests: request.include_pull_requests ?? true
   };
-  if (request.states && request.states.length > 0) {
-    body.states = request.states;
+  if (request.issue_states && request.issue_states.length > 0) {
+    body.issue_states = request.issue_states;
   }
-  return apiFetch<GitHubSelectedPullRequestSyncResponse>(
-    buildWorkspaceGitHubSelectedPullRequestSyncPath(workspaceId),
+  if (request.pull_request_states && request.pull_request_states.length > 0) {
+    body.pull_request_states = request.pull_request_states;
+  }
+  return apiFetch<GitHubAppLiveSyncResponse>(
+    buildWorkspaceGitHubAppLiveSyncPath(workspaceId),
     {
       ...options,
       body: JSON.stringify(body),
@@ -473,33 +1194,95 @@ export async function syncSelectedRepositoryPullRequests(
   );
 }
 
-export async function syncSelectedRepositoryGitHubWork(
+export function buildWorkspaceGitHubSyncJobPath(
   workspaceId: string,
-  request: {
-    connection_id: string;
-    repositories: string[];
-    issueStates?: GitHubSelectedIssueSyncRequest["states"];
-    pullRequestStates?: GitHubSelectedPullRequestSyncRequest["states"];
-  },
+  syncJobId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/sync-jobs/${encodeURIComponent(syncJobId)}`;
+}
+
+export async function fetchGitHubSyncJob(
+  workspaceId: string,
+  syncJobId: string,
   options: ApiFetchOptions = {}
-): Promise<GitHubSelectedRepositorySyncResult> {
-  const issues = await syncSelectedRepositoryIssues(
-    workspaceId,
-    {
-      connection_id: request.connection_id,
-      repositories: request.repositories,
-      states: request.issueStates
-    },
+): Promise<GitHubSyncJobRead> {
+  return apiFetch<GitHubSyncJobRead>(
+    buildWorkspaceGitHubSyncJobPath(workspaceId, syncJobId),
     options
   );
-  const pullRequests = await syncSelectedRepositoryPullRequests(
-    workspaceId,
-    {
-      connection_id: request.connection_id,
-      repositories: request.repositories,
-      states: request.pullRequestStates
-    },
-    options
+}
+
+export async function cancelGitHubSyncJob(
+  workspaceId: string,
+  syncJobId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubSyncJobRead> {
+  return apiFetch<GitHubSyncJobRead>(
+    `${buildWorkspaceGitHubSyncJobPath(workspaceId, syncJobId)}/cancel`,
+    { ...options, method: "POST" }
   );
-  return { issues, pull_requests: pullRequests };
+}
+
+export function isGitHubSyncJobTerminal(status: string): boolean {
+  return ["cancelled", "failed", "partial", "succeeded"].includes(
+    status.trim().toLowerCase()
+  );
+}
+
+type WaitForGitHubSyncJobOptions = ApiFetchOptions & {
+  intervalMs?: number;
+  maxPolls?: number;
+  onUpdate?: (syncJob: GitHubSyncJobRead) => void;
+};
+
+export async function waitForGitHubSyncJob(
+  workspaceId: string,
+  syncJobId: string,
+  options: WaitForGitHubSyncJobOptions = {}
+): Promise<GitHubSyncJobRead> {
+  const {
+    intervalMs = 1000,
+    maxPolls = 600,
+    onUpdate,
+    ...fetchOptions
+  } = options;
+  const boundedPolls = Math.max(1, maxPolls);
+  for (let poll = 0; poll < boundedPolls; poll += 1) {
+    const syncJob = await fetchGitHubSyncJob(
+      workspaceId,
+      syncJobId,
+      fetchOptions
+    );
+    onUpdate?.(syncJob);
+    if (isGitHubSyncJobTerminal(syncJob.status)) {
+      return syncJob;
+    }
+    if (poll + 1 < boundedPolls) {
+      await waitForGitHubSyncPoll(intervalMs, fetchOptions.signal);
+    }
+  }
+  throw new Error("github sync job did not finish in time");
+}
+
+async function waitForGitHubSyncPoll(
+  intervalMs: number,
+  signal?: AbortSignal | null
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    const onElapsed = () => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+    const timeout = setTimeout(onElapsed, Math.max(0, intervalMs));
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+    }
+  });
 }

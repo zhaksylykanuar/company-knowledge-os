@@ -11,10 +11,12 @@ from types import SimpleNamespace
 
 import pytest
 
+import app.services.secret_encryption as secret_encryption
 from app.services.secret_encryption import (
     SecretEncryptionError,
     decrypt_secret,
     encrypt_secret,
+    keyed_secret_digest,
 )
 
 
@@ -50,7 +52,7 @@ def test_encryption_roundtrips_outside_local_with_dedicated_key() -> None:
     )
 
     encrypted = encrypt_secret("provider-token-value", config=config)
-    assert encrypted.startswith("fernet:v1:")
+    assert encrypted.startswith("fernet:v2:")
     assert decrypt_secret(encrypted, config=config) == "provider-token-value"
 
 
@@ -65,3 +67,48 @@ def test_local_dev_may_reuse_api_auth_key_fallback() -> None:
 
     encrypted = encrypt_secret("provider-token-value", config=config)
     assert decrypt_secret(encrypted, config=config) == "provider-token-value"
+
+
+def test_legacy_v1_ciphertext_remains_decryptable() -> None:
+    config = _config(
+        app_env="production",
+        secret_encryption_key="dedicated-encryption-key",
+        api_auth_key=None,
+    )
+    legacy_token = secret_encryption._legacy_fernet(config).encrypt(
+        b"legacy-provider-token"
+    )
+
+    assert decrypt_secret(
+        f"fernet:v1:{legacy_token.decode('utf-8')}",
+        config=config,
+    ) == "legacy-provider-token"
+
+
+def test_keyed_digest_is_deterministic_and_domain_separated() -> None:
+    config = _config(
+        app_env="production",
+        secret_encryption_key="dedicated-encryption-key",
+        api_auth_key=None,
+    )
+
+    first = keyed_secret_digest(
+        "opaque-one-time-state",
+        purpose="setup-state-v1",
+        config=config,
+    )
+    replay = keyed_secret_digest(
+        "opaque-one-time-state",
+        purpose="setup-state-v1",
+        config=config,
+    )
+    other_purpose = keyed_secret_digest(
+        "opaque-one-time-state",
+        purpose="other-state-v1",
+        config=config,
+    )
+
+    assert first == replay
+    assert len(first) == 64
+    assert first != "opaque-one-time-state"
+    assert first != other_purpose

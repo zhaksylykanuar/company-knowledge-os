@@ -14,6 +14,9 @@ EXPECTED_ALEMBIC_TABLES = {
     "memberships",
     "integration_connections",
     "sync_jobs",
+    "github_app_credentials",
+    "github_app_installations",
+    "github_app_setup_sessions",
     "action_proposals",
     "action_executions",
     "action_execution_events",
@@ -23,13 +26,23 @@ EXPECTED_ALEMBIC_TABLES = {
     "repositories",
     "pull_requests",
     "tasks",
+    "people",
+    "organizations",
+    "affiliations",
+    "interactions",
+    "company_world_resolutions",
+    "company_memory_events",
+    "company_memory_event_streams",
+    "company_memory_checkpoints",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
     "app.db.action_models",
     "app.db.canonical_models",
+    "app.db.company_world_models",
     "app.db.identity_models",
     "app.db.integration_models",
+    "app.db.memory_models",
     "app.db.models",
     "app.db.event_models",
 }

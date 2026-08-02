@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+bash scripts/check_no_secrets.sh --staged
+git diff --cached --check
+uv run ruff check .
+uv run mypy app
+
+cd web
+npm run typecheck
+npm run lint

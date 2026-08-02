@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 import { SourceLink } from "../components/SourceLink";
-import { safeHref } from "../lib/safeHref";
+import { safeGitHubLaunchHref, safeHref } from "../lib/safeHref";
 import type { BriefingEvidenceRef } from "../lib/types";
 
 test("safeHref allows http and https URLs", () => {
@@ -31,6 +31,23 @@ test("safeHref rejects dangerous and malformed URLs", () => {
     undefined
   ]) {
     assert.equal(safeHref(dangerous), null, `expected null for ${String(dangerous)}`);
+  }
+});
+
+test("safeGitHubLaunchHref allows only canonical HTTPS GitHub navigation", () => {
+  assert.equal(
+    safeGitHubLaunchHref("https://github.com/settings/apps/new?state=opaque"),
+    "https://github.com/settings/apps/new?state=opaque"
+  );
+  for (const unsafe of [
+    "http://github.com/settings/apps/new",
+    "https://github.com.evil.example/settings/apps/new",
+    "https://evil.example/github.com/settings/apps/new",
+    "https://user@github.com/settings/apps/new",
+    "https://github.com:444/settings/apps/new",
+    "//github.com/settings/apps/new"
+  ]) {
+    assert.equal(safeGitHubLaunchHref(unsafe), null, `expected null for ${unsafe}`);
   }
 });
 

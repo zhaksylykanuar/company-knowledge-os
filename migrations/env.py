@@ -4,10 +4,13 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from app.core.config import settings
+from app.db.migration_url import psycopg_migration_url
 
 config = context.config
-alembic_database_url = settings.database_url.replace("+asyncpg", "+psycopg")
-config.set_main_option("sqlalchemy.url", alembic_database_url)
+alembic_database_url = psycopg_migration_url(settings.database_url)
+# Alembic stores main options in ConfigParser, where a literal percent must be
+# doubled on write. Reading the option returns the original single-percent URL.
+config.set_main_option("sqlalchemy.url", alembic_database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -16,8 +19,11 @@ from app.db.base import Base  # noqa: E402
 import app.db.action_models  # noqa: F401,E402
 import app.db.briefing_models  # noqa: F401,E402
 import app.db.canonical_models  # noqa: F401,E402
+import app.db.company_world_models  # noqa: F401,E402
+import app.db.document_models  # noqa: F401,E402
 import app.db.identity_models  # noqa: F401,E402
 import app.db.integration_models  # noqa: F401,E402
+import app.db.memory_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.event_models  # noqa: F401,E402
 

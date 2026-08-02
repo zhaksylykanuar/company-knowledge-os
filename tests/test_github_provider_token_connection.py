@@ -184,7 +184,7 @@ def test_secret_encryption_roundtrip(monkeypatch) -> None:
     encrypted = encrypt_secret(PLAIN_TEST_TOKEN)
 
     assert encrypted != PLAIN_TEST_TOKEN
-    assert encrypted.startswith("fernet:v1:")
+    assert encrypted.startswith("fernet:v2:")
     assert decrypt_secret(encrypted) == PLAIN_TEST_TOKEN
 
 

@@ -1,9 +1,8 @@
 # FounderOS Docs
 
-This is the single navigation entry for the current FounderOS documentation set.
-After the Lineage-2 purge (DEC-029), the active docs are intentionally small:
-source-of-truth docs for the current product and audit-only history for
-recovering deleted context.
+This is the single navigation entry for the active FounderOS 2.0 documentation.
+The product is an AI partner with evidence-backed company memory. Superseded
+Command Center documentation is not part of the active set.
 
 ## Reading Order
 
@@ -19,6 +18,8 @@ recovering deleted context.
 5. [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md),
    [`POST_MVP.md`](POST_MVP.md), and [`CHANGELOG.md`](CHANGELOG.md) - planning,
    near-term backlog, deferred scope, and dated change history.
+6. [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md) - executable
+   acceptance ledger for the AI-first product reset.
 
 ## Source-of-truth Matrix
 
@@ -31,13 +32,37 @@ recovering deleted context.
 | What is the current development workflow for agents? | [`../AGENTS.md`](../AGENTS.md) and [`../CLAUDE.md`](../CLAUDE.md) |
 | What are the safety/security boundaries? | [`../AGENTS.md`](../AGENTS.md), [`../CLAUDE.md`](../CLAUDE.md), [`../SECURITY_BASELINE.md`](../SECURITY_BASELINE.md) |
 | What should be built next? | [`../PROGRESS.md`](../PROGRESS.md), then [`TODO.md`](TODO.md) |
+| How is the AI-first product reset verified? | [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
-| How do we deploy/smoke private beta manually? | [`deploy/private-beta.md`](deploy/private-beta.md) and [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) |
+| How should FounderOS learn what every repository does and how repositories relate? | [`REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md`](REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md) |
+| How should Repository Intelligence be prepared and launched operationally? | [`REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md`](REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md) |
+| How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
+| How do we recover after loss of the FounderOS machine? | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) |
+| Where do secrets and runtime settings belong? | [`operations/secrets-and-environment.md`](operations/secrets-and-environment.md) |
+| How are connector credentials saved and verified in the product? | [`integrations-control-center.md`](integrations-control-center.md) |
+| How do we prove a bounded provider read or external action? | [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
 
-## Deploy Runbooks
+## Operations And Human-Gated Runbooks
 
-- [`deploy/private-beta.md`](deploy/private-beta.md) - manual private-beta deployment, migration, rollback, CORS, env-name, and smoke procedure.
-- [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) - concrete Railway split-service dry-run plan and placeholder env templates.
+- [`integrations-control-center.md`](integrations-control-center.md) - secure
+  owner/admin configuration, fixed provider read probes, dry-run write
+  readiness, runtime gates, and explicitly missing OAuth/write capabilities.
+- [`operations/local-runtime.md`](operations/local-runtime.md) - canonical local start, doctor, smoke, backup/restore, stop, recovery, and external-resource deletion boundary.
+- [`operations/disaster-recovery.md`](operations/disaster-recovery.md) -
+  encrypted independent copy, restore drills, recovery objectives, retention,
+  and explicit human-operated boundaries.
+- [`operations/secrets-and-environment.md`](operations/secrets-and-environment.md) -
+  the single `.env.local` bootstrap boundary and the encrypted, UI-only
+  provider credential lifecycle.
+- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook through the managed `/settings/integrations/github` flow.
+- [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.
+- `make local-readiness` is the sanitized repository-evidence report;
+  `make release-handoff` and `scripts/private_beta_release_handoff.py` remain
+  compatibility aliases for that same local report, not hosted-runtime paths.
+
+The former private-beta/Railway runbooks and placeholder hosting templates were
+removed by DEC-077. They remain recoverable from git history but must not be used
+as current operating instructions.
 
 ## Required Control Docs
 
@@ -46,6 +71,7 @@ recovering deleted context.
 - [`TODO.md`](TODO.md)
 - [`POST_MVP.md`](POST_MVP.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
+- [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md)
 
 ## Audit Trail
 
@@ -70,7 +96,7 @@ Lineage-2 purge; recover any from git tag `pre-purge-20260624` if needed.
   decisions.
 - Do not write real secrets, token values, database URLs, provider payloads, raw
   private source bodies, chat IDs, or production smoke outputs into docs.
-- Use placeholder env examples only (`<placeholder>`). `.env.example` and
-  `docs/deploy/templates/*.env.example` are templates, not real config.
+- Use placeholder env examples only (`<placeholder>`). `.env.example` is a
+  template, not real config.
 - Delete obsolete docs only when they are clearly superseded or recoverable from
   git history/tag. If unsure, preserve the file and document the uncertainty.

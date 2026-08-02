@@ -47,8 +47,8 @@ def _reject_api_auth() -> NoReturn:
     )
 
 
-def _configured_key(config: ApiAuthConfig) -> str | None:
-    key = config.api_auth_key
+def _configured_key(config: object) -> str | None:
+    key = getattr(config, "api_auth_key", None)
     if isinstance(key, SecretStr):
         key = key.get_secret_value()
 
@@ -61,9 +61,6 @@ def _configured_key(config: ApiAuthConfig) -> str | None:
 
 def _configured_header_name(config: ApiAuthConfig) -> str | None:
     header_name = config.api_auth_header_name
-    if not isinstance(header_name, str):
-        return None
-
     stripped = header_name.strip()
     return stripped or None
 
@@ -226,4 +223,10 @@ def enforce_fail_closed_auth(config: object) -> None:
             "Refusing to start: API authentication is enabled in a non-local "
             "environment but no API key is configured. Set API_AUTH_KEY or "
             "FOUNDEROS_API_KEYS before deploying."
+        )
+    if getattr(config, "session_cookie_samesite", "lax") == "none":
+        raise FailClosedAuthError(
+            "Refusing to start: FOUNDEROS_SESSION_COOKIE_SAMESITE=none is "
+            "incompatible with the first-party FounderOS session boundary. "
+            "Use lax or strict."
         )

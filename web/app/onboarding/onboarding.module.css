@@ -1,0 +1,101 @@
+.kicker {
+  color: #6d796f;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+  margin: 0 0 0.6rem;
+  text-transform: uppercase;
+}
+
+.lead {
+  color: #657169;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  margin: 1.25rem 0 0;
+  max-width: 40rem;
+}
+
+.primaryAction {
+  align-items: center;
+  background: #172a20;
+  border: 0;
+  border-radius: 0.9rem;
+  color: #fff;
+  display: flex;
+  font-size: 0.86rem;
+  font-weight: 850;
+  justify-content: center;
+  margin-top: 2rem;
+  min-height: 3.15rem;
+  min-width: 13rem;
+  padding: 0.72rem 1.1rem;
+}
+
+.primaryAction:focus-visible {
+  outline: 3px solid #245c36;
+  outline-offset: 2px;
+}
+
+.loadingPage,
+.recoveryPage {
+  display: grid;
+  min-height: calc(100vh - 4.6rem);
+  padding: 1.5rem;
+  place-items: center;
+}
+
+.loadingPage {
+  align-content: center;
+  color: #657269;
+  font-size: 0.82rem;
+  gap: 0.8rem;
+}
+
+.loadingPulse {
+  animation: breathe 1.2s ease-in-out infinite alternate;
+  background: #bdf254;
+  border-radius: 1rem;
+  height: 3.2rem;
+  width: 3.2rem;
+}
+
+.recoveryCard {
+  background: #fff;
+  border: 1px solid #dbe3dc;
+  border-radius: 1.5rem;
+  box-shadow: 0 1.5rem 4rem rgb(31 54 39 / 8%);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  width: min(100%, 43rem);
+}
+
+.recoveryCard h1 {
+  color: #132019;
+  font-size: clamp(2.4rem, 6vw, 5.4rem);
+  letter-spacing: -0.068em;
+  line-height: 0.91;
+  margin: 0;
+  max-width: 41rem;
+}
+
+.recoveryMark {
+  background: #ffe4ad;
+  border-radius: 0.9rem;
+  color: #6b4a0a;
+  display: grid;
+  font-weight: 900;
+  height: 3rem;
+  margin-bottom: 2rem;
+  place-items: center;
+  width: 3rem;
+}
+
+@keyframes breathe {
+  from { opacity: 0.65; transform: scale(0.86); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingPulse {
+    animation: none;
+  }
+}

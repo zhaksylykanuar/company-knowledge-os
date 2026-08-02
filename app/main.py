@@ -1,27 +1,78 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
-from app.api.auth import enforce_fail_closed_auth, get_current_actor
+from app.api.ai_settings import router as ai_settings_router
+from app.api.assistant import router as assistant_router
+from app.api.auth import enforce_fail_closed_auth, get_current_actor, require_api_key
 from app.api.auth_routes import router as auth_router
 from app.api.briefings import router as briefings_router
 from app.api.company_brain import router as company_brain_router
+from app.api.company_map import router as company_map_router
+from app.api.connectors import router as connectors_router
 from app.api.dev import router as dev_router
+from app.api.documents import router as documents_router
+from app.api.drive import router as drive_router
 from app.api.github import router as github_router
+from app.api.gmail import router as gmail_router
 from app.api.health import router as health_router
+from app.api.headquarters import router as headquarters_router
+from app.api.jira import router as jira_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
 from app.core.config import resolved_cors_allowed_origins, settings
+from app.core.http_security import (
+    ConnectorResponseNoStoreMiddleware,
+    HttpSecurityMiddleware,
+)
+from app.core.logging import RequestLoggingMiddleware, configure_logging
+from app.services.auth_artifact_cleanup_service import run_auth_artifact_cleanup
+from app.services.github_sync_worker_service import run_github_sync_workers
+
+# Configure basic application logging as early as possible (MVP §1.5 "basic
+# logging"): a single sanitized handler at the configured level.
+configure_logging(settings.log_level)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Fail loudly at startup if a non-local deployment is not fail-closed.
     enforce_fail_closed_auth(settings)
-    yield
+    # Re-apply logging config on startup so the level reflects the current
+    # environment even if settings changed after import (e.g. in tests).
+    configure_logging(settings.log_level)
+    cleanup_stop = asyncio.Event()
+    cleanup_task: asyncio.Task[None] | None = None
+    sync_worker_stop = asyncio.Event()
+    sync_worker_task: asyncio.Task[None] | None = None
+    is_test = settings.app_env.strip().casefold() in {"test", "testing"}
+    if not is_test:
+        cleanup_task = asyncio.create_task(
+            run_auth_artifact_cleanup(cleanup_stop),
+            name="founderos-auth-artifact-cleanup",
+        )
+        if settings.github_sync_worker_enabled:
+            sync_worker_task = asyncio.create_task(
+                run_github_sync_workers(sync_worker_stop),
+                name="founderos-github-sync-workers",
+            )
+    try:
+        yield
+    finally:
+        cleanup_stop.set()
+        sync_worker_stop.set()
+        if cleanup_task is not None:
+            cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup_task
+        if sync_worker_task is not None:
+            sync_worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await sync_worker_task
 
 
 app = FastAPI(
@@ -30,13 +81,22 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Basic request logging: method, path, status, duration — no bodies/secrets.
+app.add_middleware(RequestLoggingMiddleware)
+# Connector configuration and verification responses are never cacheable,
+# including auth/validation failures created before endpoint execution.
+app.add_middleware(ConnectorResponseNoStoreMiddleware)
+# Global browser boundary: security headers, local-only API documentation and
+# Origin/Referer validation for cookie-authenticated mutations.
+app.add_middleware(HttpSecurityMiddleware)
+
 cors_allowed_origins = resolved_cors_allowed_origins(settings)
 if cors_allowed_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_allowed_origins,
         allow_credentials=settings.cors_allow_credentials,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
             "Accept",
             "Content-Type",
@@ -53,12 +113,23 @@ app.include_router(health_router, prefix="/health", tags=["health"])
 # Auth (login/logout/me/change-password) manages its own session auth — public.
 app.include_router(auth_router)
 app.include_router(workspaces_router, dependencies=protected_api_dependencies)
+app.include_router(connectors_router, dependencies=protected_api_dependencies)
 app.include_router(github_router, dependencies=protected_api_dependencies)
+app.include_router(jira_router, dependencies=protected_api_dependencies)
+app.include_router(gmail_router, dependencies=protected_api_dependencies)
+app.include_router(drive_router, dependencies=protected_api_dependencies)
+app.include_router(documents_router, dependencies=protected_api_dependencies)
+app.include_router(ai_settings_router, dependencies=protected_api_dependencies)
+app.include_router(assistant_router, dependencies=protected_api_dependencies)
+app.include_router(headquarters_router, dependencies=protected_api_dependencies)
+app.include_router(company_map_router, dependencies=protected_api_dependencies)
 app.include_router(workspace_company_brain_router, dependencies=protected_api_dependencies)
 app.include_router(briefings_router, dependencies=protected_api_dependencies)
 app.include_router(actions_router, dependencies=protected_api_dependencies)
-# Company Brain preview: read-only views over the local preview.
-app.include_router(company_brain_router, dependencies=protected_api_dependencies)
+# Legacy filesystem Company Brain preview: operator-only. These routes are not
+# workspace-scoped and therefore must never accept a browser session as product
+# authorization. Workspace product reads use workspace_company_brain_router.
+app.include_router(company_brain_router, dependencies=[Depends(require_api_key)])
 # Local-dev-only browser bootstrap; intentionally public (hands the browser
 # its local dev key) and gated to APP_ENV=local inside the route.
 app.include_router(dev_router)

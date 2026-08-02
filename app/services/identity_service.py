@@ -17,8 +17,6 @@ from app.db.identity_models import (
     User,
     Workspace,
 )
-
-
 ROLE_ORDER = {
     MEMBERSHIP_ROLE_VIEWER: 10,
     MEMBERSHIP_ROLE_MEMBER: 20,
@@ -40,6 +38,15 @@ class WorkspaceMembership:
     user: User
     workspace: Workspace
     membership: Membership
+
+
+@dataclass(frozen=True)
+class ProvisionedWorkspaceMember:
+    user: User
+    workspace: Workspace
+    membership: Membership
+    login_credential_set: bool
+    user_created: bool
 
 
 def normalize_email(email: str) -> str:
@@ -137,6 +144,89 @@ async def create_membership(
     session.add(membership)
     await session.flush()
     return membership, True
+
+
+async def list_workspace_members(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+) -> list[WorkspaceMembership]:
+    rows = (
+        await session.execute(
+            select(User, Workspace, Membership)
+            .join(Membership, Membership.user_id == User.id)
+            .join(Workspace, Workspace.id == Membership.workspace_id)
+            .where(Workspace.id == workspace_id)
+            .order_by(Membership.created_at.asc(), User.email.asc())
+        )
+    ).all()
+    return [
+        WorkspaceMembership(user=user, workspace=workspace, membership=membership)
+        for user, workspace, membership in rows
+    ]
+
+
+async def provision_workspace_member(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    email: str,
+    name: str | None,
+    role: str = MEMBERSHIP_ROLE_MEMBER,
+) -> ProvisionedWorkspaceMember:
+    if role == MEMBERSHIP_ROLE_OWNER:
+        raise IdentityAccessError("owner role is bootstrap-only")
+    if role not in ROLE_ORDER:
+        raise IdentityAccessError("unsupported membership role")
+
+    workspace = await session.get(Workspace, workspace_id)
+    if workspace is None:
+        raise IdentityAccessError("workspace not found")
+
+    user, user_created = await get_or_create_user_by_email(
+        session, email=email, name=name
+    )
+    if not user_created:
+        # Serialize cross-workspace membership decisions on the global identity.
+        # Without this row lock, two admins could concurrently observe an orphan
+        # account and attach it to two workspaces before either transaction commits.
+        locked_user = await session.scalar(
+            select(User).where(User.id == user.id).with_for_update()
+        )
+        if locked_user is None:
+            raise IdentityConflictError("existing account is unavailable")
+        user = locked_user
+    if user.status == USER_STATUS_DISABLED:
+        raise IdentityAccessError("user disabled")
+
+    if not user_created:
+        outside_membership = await session.scalar(
+            select(Membership.id)
+            .where(Membership.user_id == user.id)
+            .where(Membership.workspace_id != workspace.id)
+            .limit(1)
+        )
+        if outside_membership is not None:
+            raise IdentityConflictError(
+                "existing account must accept a workspace invitation"
+            )
+
+    membership, membership_created = await create_membership(
+        session,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        role=role,
+    )
+    if not membership_created:
+        raise IdentityConflictError("workspace membership already exists")
+
+    return ProvisionedWorkspaceMember(
+        user=user,
+        workspace=workspace,
+        membership=membership,
+        login_credential_set=False,
+        user_created=user_created,
+    )
 
 
 async def bootstrap_workspace_for_owner(

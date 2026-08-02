@@ -9,18 +9,30 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.integration_models import (
+    GITHUB_APP_CREDENTIAL_STATUS_ACTIVE,
+    GITHUB_APP_INSTALLATION_STATUS_ACTIVE,
     INTEGRATION_CONNECTION_STATUS_CONNECTED,
     INTEGRATION_CONNECTION_STATUS_DISABLED,
     INTEGRATION_CONNECTION_STATUS_ERROR,
     INTEGRATION_CONNECTION_STATUS_REVOKED,
     INTEGRATION_PROVIDER_GITHUB,
+    GitHubAppCredential,
+    GitHubAppInstallation,
     IntegrationConnection,
 )
+from app.services.github_app_credential_service import redact_github_app_credential
 from app.services.secret_encryption import encrypt_secret
 
 GITHUB_CONNECTION_PROVIDER = INTEGRATION_PROVIDER_GITHUB
 GITHUB_CONNECTION_STATUS_LOCAL_BRIDGE_ONLY = "local_bridge_only"
 GITHUB_CONNECTION_STATUS_NOT_CONNECTED = "not_connected"
+GITHUB_APP_CONNECTION_METHOD = "github_app_installation"
+GITHUB_APP_MANAGED_CONNECTION_SOURCE = "founderos_self_service"
+GITHUB_APP_EXTERNAL_ACCOUNT_PREFIX = "github_app_installation:"
+GITHUB_APP_TOKEN_WARNING = (
+    "GitHub App installation uses just-in-time installation tokens; no installation access token is persisted."
+)
+GITHUB_PROVIDER_TOKEN_CONNECTION_METHOD = "manual_provider_token"
 GITHUB_REPOSITORY_READ_SOURCE_LOCAL_BRIDGE = "local_bridge"
 GITHUB_REPOSITORY_READ_SOURCE_INTEGRATION_CONNECTION = "integration_connection"
 
@@ -39,13 +51,11 @@ _SENSITIVE_METADATA_KEY_MARKERS = (
     "token",
     "webhook",
 )
-_SAFE_METADATA_KEYS = {"token_validated"}
+_SAFE_METADATA_KEYS = {"installation_access_token_persisted", "token_validated"}
 GITHUB_PROVIDER_TOKEN_WARNING = (
     "GitHub token is stored for future sync but was not validated with GitHub in this step."
 )
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class GitHubProviderTokenConnectionInput:
     access_token: str
     display_name: str | None = None
@@ -93,32 +103,107 @@ async def get_github_connection_status(
     workspace_id: UUID,
 ) -> dict[str, Any]:
     connections = await list_github_connections(session, workspace_id=workspace_id)
-    selected = _select_status_connection(connections)
+    managed_credential = await _get_workspace_github_app_credential(
+        session,
+        workspace_id=workspace_id,
+    )
+    verified_installation, verified_connection = (
+        await _get_verified_github_app_installation_connection(
+            session,
+            workspace_id=workspace_id,
+        )
+    )
+    selected = (
+        redact_connection(verified_connection)
+        if verified_connection is not None
+        else _select_status_connection(connections)
+    )
     warnings: list[str] = []
+    app_config = _workspace_github_app_config(managed_credential)
 
     if selected is None:
         return {
             "provider": INTEGRATION_PROVIDER_GITHUB,
             "status": GITHUB_CONNECTION_STATUS_LOCAL_BRIDGE_ONLY,
+            "connection_method": None,
             "connection_id": None,
             "display_name": None,
             "last_sync_at": None,
             "last_error": None,
             "has_connection_record": False,
             "has_valid_token_record": False,
+            "installation_verified": False,
+            "live_read_available": False,
+            "selected_repositories": [],
             "repository_read_available": True,
             "repository_read_source": GITHUB_REPOSITORY_READ_SOURCE_LOCAL_BRIDGE,
             "is_live": False,
+            "app": app_config,
             "warnings": [
                 "no GitHub IntegrationConnection exists; repository read uses local bridge only"
             ],
         }
 
+    connection_method = _connection_method(selected)
+    is_app_installation = connection_method == GITHUB_APP_CONNECTION_METHOD
+    managed_installation_verified = bool(
+        is_app_installation
+        and verified_installation is not None
+        and verified_connection is not None
+        and selected["id"] == verified_connection.id
+        and managed_credential is not None
+        and managed_credential.status == GITHUB_APP_CREDENTIAL_STATUS_ACTIVE
+        and verified_installation.credential_id == managed_credential.id
+    )
+    legacy_installation_verified = bool(
+        is_app_installation
+        and managed_credential is None
+        and not _metadata_matches(
+            selected,
+            "created_via",
+            GITHUB_APP_MANAGED_CONNECTION_SOURCE,
+        )
+        and _metadata_bool(selected, "installation_verified")
+    )
+    installation_verified = (
+        managed_installation_verified or legacy_installation_verified
+    )
     has_valid_token_record = (
         selected["status"] == INTEGRATION_CONNECTION_STATUS_CONNECTED
         and bool(selected["has_access_token"])
     )
-    if selected["status"] == INTEGRATION_CONNECTION_STATUS_CONNECTED and not selected[
+    jit_live_read_available = bool(
+        selected["status"] == INTEGRATION_CONNECTION_STATUS_CONNECTED
+        and is_app_installation
+        and installation_verified
+        and app_config["configured"]
+        and (
+            managed_credential is None
+            or _metadata_bool(selected, "provider_reads_enabled")
+        )
+    )
+    live_read_available = has_valid_token_record or jit_live_read_available
+    selected_repositories = (
+        _selected_repository_full_names(
+            verified_connection.provider_metadata
+            if managed_installation_verified and verified_connection is not None
+            else selected.get("metadata")
+        )
+        if is_app_installation
+        else []
+    )
+    if (
+        selected["status"] == INTEGRATION_CONNECTION_STATUS_CONNECTED
+        and not selected["has_access_token"]
+        and is_app_installation
+    ):
+        if installation_verified:
+            warnings.append(GITHUB_APP_TOKEN_WARNING)
+        else:
+            warnings.append(
+                "GitHub App installation is not provider-verified; live read is disabled"
+            )
+    elif selected["status"] == INTEGRATION_CONNECTION_STATUS_CONNECTED and not selected[
         "has_access_token"
     ]:
         warnings.append(
@@ -131,21 +216,26 @@ async def get_github_connection_status(
 
     repository_read_source = (
         GITHUB_REPOSITORY_READ_SOURCE_INTEGRATION_CONNECTION
-        if has_valid_token_record
+        if live_read_available
         else GITHUB_REPOSITORY_READ_SOURCE_LOCAL_BRIDGE
     )
     return {
         "provider": INTEGRATION_PROVIDER_GITHUB,
         "status": selected["status"],
+        "connection_method": connection_method,
         "connection_id": selected["id"],
         "display_name": selected["display_name"],
         "last_sync_at": selected["last_sync_at"],
         "last_error": selected["last_error"],
         "has_connection_record": True,
         "has_valid_token_record": has_valid_token_record,
+        "installation_verified": installation_verified,
+        "live_read_available": live_read_available,
+        "selected_repositories": selected_repositories,
         "repository_read_available": True,
         "repository_read_source": repository_read_source,
         "is_live": False,
+        "app": app_config,
         "warnings": warnings,
     }
 
@@ -200,6 +290,7 @@ def redact_connection(connection: IntegrationConnection) -> dict[str, Any]:
         "last_error": connection.last_error,
         "has_access_token": bool(connection.encrypted_access_token),
         "has_refresh_token": bool(connection.encrypted_refresh_token),
+        "connection_method": _metadata_connection_method(connection.provider_metadata),
         "metadata": _redact_metadata(connection.provider_metadata),
         "created_at": connection.created_at,
         "updated_at": connection.updated_at,
@@ -232,7 +323,7 @@ async def _find_provider_token_connection(
         for connection in rows
         if isinstance(connection.provider_metadata, Mapping)
         and connection.provider_metadata.get("connection_method")
-        == "manual_provider_token"
+        == GITHUB_PROVIDER_TOKEN_CONNECTION_METHOD
     ]
     if len(manual_connections) == 1:
         return manual_connections[0]
@@ -252,6 +343,90 @@ def _select_status_connection(
             if connection["status"] == status:
                 return connection
     return connections[0]
+
+
+async def _get_workspace_github_app_credential(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+) -> GitHubAppCredential | None:
+    return await session.scalar(
+        select(GitHubAppCredential).where(
+            GitHubAppCredential.workspace_id == workspace_id
+        )
+    )
+
+
+async def _get_verified_github_app_installation_connection(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+) -> tuple[GitHubAppInstallation | None, IntegrationConnection | None]:
+    installation = await session.scalar(
+        select(GitHubAppInstallation)
+        .where(GitHubAppInstallation.workspace_id == workspace_id)
+        .where(GitHubAppInstallation.status == GITHUB_APP_INSTALLATION_STATUS_ACTIVE)
+        .order_by(GitHubAppInstallation.verified_at.desc())
+    )
+    if installation is None:
+        return None, None
+    connection = await session.get(IntegrationConnection, installation.connection_id)
+    if (
+        connection is None
+        or connection.workspace_id != workspace_id
+        or connection.provider != INTEGRATION_PROVIDER_GITHUB
+        or _metadata_connection_method(connection.provider_metadata)
+        != GITHUB_APP_CONNECTION_METHOD
+    ):
+        return None, None
+    return installation, connection
+
+
+def _metadata_bool(connection: Mapping[str, Any], key: str) -> bool:
+    metadata = connection.get("metadata")
+    return isinstance(metadata, Mapping) and metadata.get(key) is True
+
+
+def _metadata_matches(
+    connection: Mapping[str, Any],
+    key: str,
+    expected: str,
+) -> bool:
+    metadata = connection.get("metadata")
+    return isinstance(metadata, Mapping) and metadata.get(key) == expected
+
+
+def _selected_repository_full_names(value: Any) -> list[str]:
+    if not isinstance(value, Mapping):
+        return []
+    raw_repositories = value.get("selected_repositories")
+    if not isinstance(raw_repositories, list):
+        return []
+    selected: list[str] = []
+    seen: set[str] = set()
+    for item in raw_repositories[:100]:
+        raw_full_name = item.get("full_name") if isinstance(item, Mapping) else item
+        if not isinstance(raw_full_name, str):
+            continue
+        full_name = raw_full_name.strip()[:255]
+        folded = full_name.casefold()
+        if full_name.count("/") != 1 or not full_name or folded in seen:
+            continue
+        selected.append(full_name)
+        seen.add(folded)
+    return selected
+
+
+def _connection_method(connection: Mapping[str, Any]) -> str | None:
+    raw_method = connection.get("connection_method")
+    return raw_method if isinstance(raw_method, str) and raw_method else None
+
+
+def _metadata_connection_method(value: Any) -> str | None:
+    if not isinstance(value, Mapping):
+        return None
+    raw_method = value.get("connection_method")
+    return raw_method if isinstance(raw_method, str) and raw_method else None
 
 
 def _redact_metadata(value: Any) -> dict[str, Any]:
@@ -289,7 +464,7 @@ def _provider_token_metadata(
     plaintext_token: str,
 ) -> dict[str, Any]:
     metadata: dict[str, Any] = {
-        "connection_method": "manual_provider_token",
+        "connection_method": GITHUB_PROVIDER_TOKEN_CONNECTION_METHOD,
         "token_validated": False,
         "created_via": "founderos_operator_bridge",
     }
@@ -329,11 +504,59 @@ def _safe_scopes(scopes: list[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for raw_scope in scopes[:50]:
-        if not isinstance(raw_scope, str):
-            continue
         scope = raw_scope.strip()
         if not scope or scope in seen:
             continue
         normalized.append(scope[:120])
         seen.add(scope)
     return normalized
+
+
+def _workspace_github_app_config(
+    credential: GitHubAppCredential | None,
+) -> dict[str, Any]:
+    if credential is None:
+        return {
+            "configured": False,
+            "credential_source": "none",
+            "app_id_configured": False,
+            "app_slug": None,
+            "app_name": None,
+            "private_key_configured": False,
+            "private_key_source": None,
+            "webhook_secret_configured": False,
+            "setup_url": None,
+            "callback_url": None,
+            "missing_requirements": ["github_app_product_setup"],
+            "installation_tokens_persisted": False,
+            "provider_writes_enabled": False,
+        }
+
+    managed = redact_github_app_credential(credential)
+    configured = bool(managed["configured"])
+    app_slug = managed["app_slug"] if configured else None
+    return {
+        "configured": configured,
+        "credential_source": "managed",
+        "app_id_configured": bool(managed["app_id_configured"]),
+        "app_slug": app_slug,
+        "app_name": managed["app_name"],
+        "private_key_configured": bool(managed["private_key_configured"]),
+        "private_key_source": "encrypted_database" if configured else None,
+        "webhook_secret_configured": bool(
+            managed["webhook_secret_configured"]
+        ),
+        "setup_url": (
+            f"https://github.com/apps/{app_slug}/installations/new"
+            if isinstance(app_slug, str) and app_slug
+            else None
+        ),
+        "callback_url": managed["callback_url"],
+        "missing_requirements": [],
+        "installation_tokens_persisted": False,
+        "provider_writes_enabled": False,
+    }
+
+
+def _safe_text(value: str, *, max_length: int) -> str:
+    return value.strip()[:max_length]

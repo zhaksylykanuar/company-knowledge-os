@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -7,25 +9,30 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.action_models import (
     ACTION_EXECUTION_EVENT_BLOCKED,
+    ACTION_EXECUTION_EVENT_CLAIMED,
     ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED,
     ACTION_EXECUTION_EVENT_DUPLICATE_RETURNED_EXISTING_RECEIPT,
     ACTION_EXECUTION_EVENT_FAILED,
+    ACTION_EXECUTION_EVENT_OUTCOME_UNCERTAIN,
     ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED,
     ACTION_EXECUTION_EVENT_STARTED,
     ACTION_EXECUTION_EVENT_STATUS_BLOCKED,
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
     ACTION_EXECUTION_EVENT_STATUS_UNSUPPORTED,
     ACTION_EXECUTION_EVENT_SUCCEEDED,
+    ACTION_EXECUTION_STATUS_CLAIMED,
     ACTION_EXECUTION_STATUS_FAILED,
+    ACTION_EXECUTION_STATUS_RUNNING,
     ACTION_EXECUTION_STATUS_SUCCEEDED,
+    ACTION_EXECUTION_STATUS_UNCERTAIN,
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_PROPOSAL_STATUS_EXECUTED,
-    ACTION_PROPOSAL_STATUS_FAILED,
     ACTION_TARGET_PROVIDER_GITHUB,
     ACTION_TYPE_CREATE_GITHUB_ISSUE,
     ActionExecution,
@@ -41,7 +48,12 @@ from app.services.action_execution_audit_service import (
     append_execution_event,
     execution_event_idempotency_key,
 )
-from app.services.github_issue_client import GitHubIssueClientError, create_issue
+from app.services.github_issue_client import create_issue
+from app.services.headquarters_read_service import (
+    ActionProposalEvidenceValidationError,
+    validate_action_proposal_evidence,
+)
+from app.services.real_connector_guard import require_real_connectors_enabled
 from app.services.secret_encryption import SecretEncryptionError, decrypt_secret
 
 GITHUB_ISSUE_EXECUTION_CONFIRM_REQUIRED = "confirm_external_write must be true"
@@ -66,6 +78,25 @@ GITHUB_ISSUE_EXECUTION_REPOSITORY_NOT_ALLOWED = (
 GITHUB_ISSUE_EXECUTION_DUPLICATE_RECEIPT = (
     "existing successful execution receipt returned; no external write occurred"
 )
+GITHUB_ISSUE_EXECUTION_IDEMPOTENCY_REQUIRED = (
+    "idempotency_key is required for live execution"
+)
+GITHUB_ISSUE_EXECUTION_IDEMPOTENCY_REUSED = (
+    "idempotency key was already used with different execution input"
+)
+GITHUB_ISSUE_EXECUTION_IN_PROGRESS = (
+    "an execution claim already exists; reconcile it before retrying"
+)
+GITHUB_ISSUE_EXECUTION_RETRY_KEY_REQUIRED = (
+    "the idempotency key already completed without success; use a new key"
+)
+GITHUB_ISSUE_EXECUTION_OUTCOME_UNCERTAIN = (
+    "github issue outcome is uncertain; reconcile before retrying"
+)
+GITHUB_ISSUE_EXECUTION_BODY_TOO_LARGE = (
+    "github issue body is too large for the execution marker"
+)
+GITHUB_ISSUE_BODY_MAX_BYTES = 65_536
 
 
 class GitHubIssueExecutionError(ValueError):
@@ -90,7 +121,8 @@ class GitHubIssueProviderExecutionError(GitHubIssueExecutionError):
 class GitHubIssueExecutionInput:
     connection_id: UUID
     confirm_external_write: bool
-    idempotency_key: str | None = None
+    requested_by_user_id: UUID
+    idempotency_key: str
 
 
 @dataclass(frozen=True)
@@ -109,46 +141,59 @@ async def execute_approved_github_issue_action(
     proposal_id: UUID,
     input_payload: GitHubIssueExecutionInput,
 ) -> dict[str, Any]:
+    require_real_connectors_enabled()
     if input_payload.confirm_external_write is not True:
         raise GitHubIssueExecutionError(GITHUB_ISSUE_EXECUTION_CONFIRM_REQUIRED)
+    idempotency_key = _required_idempotency_key(input_payload.idempotency_key)
 
     proposal = await _get_proposal_or_raise(
         session,
         workspace_id=workspace_id,
         proposal_id=proposal_id,
+        for_update=True,
     )
-    existing_execution = await _get_successful_execution(session, proposal_id=proposal.id)
-    if existing_execution is not None:
-        await _append_execution_audit_event(
+    request_hash = _execution_request_hash(
+        proposal=proposal,
+        workspace_id=workspace_id,
+        connection_id=input_payload.connection_id,
+        requested_by_user_id=input_payload.requested_by_user_id,
+    )
+    existing_idempotent_execution = await _get_execution_by_idempotency_key(
+        session,
+        workspace_id=workspace_id,
+        idempotency_key=idempotency_key,
+    )
+    if existing_idempotent_execution is not None:
+        return await _resolve_existing_execution(
             session,
             proposal=proposal,
-            event_type=ACTION_EXECUTION_EVENT_DUPLICATE_RETURNED_EXISTING_RECEIPT,
-            status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
-            message=GITHUB_ISSUE_EXECUTION_DUPLICATE_RECEIPT,
-            confirmation_received=True,
-            external_execution_enabled=True,
-            reason="duplicate_successful_receipt",
-            external_result_id=_external_result_id_from_response(
-                existing_execution.provider_response or {}
-            ),
-            external_result_url=_external_result_url_from_response(
-                existing_execution.provider_response or {}
-            ),
-            event_metadata={
-                "execution_id": str(existing_execution.id),
-                "proposal_status": proposal.status,
-            },
+            execution=existing_idempotent_execution,
+            request_hash=request_hash,
+            actor_user_id=input_payload.requested_by_user_id,
         )
-        return _execution_result(
+
+    existing_execution = await _get_active_or_successful_execution(
+        session,
+        proposal_id=proposal.id,
+    )
+    if existing_execution is not None:
+        return await _resolve_existing_execution(
+            session,
             proposal=proposal,
             execution=existing_execution,
-            warnings=[GITHUB_ISSUE_EXECUTION_DUPLICATE_RECEIPT],
+            request_hash=None,
+            actor_user_id=input_payload.requested_by_user_id,
         )
 
     try:
         _validate_proposal_for_execution(proposal)
         issue_payload = validate_github_issue_payload(proposal.payload or {})
-        _validate_evidence_for_live_execution(proposal)
+        _validate_body_marker_capacity(issue_payload.body)
+        await _validate_evidence_for_live_execution(
+            session,
+            workspace_id=workspace_id,
+            proposal=proposal,
+        )
         _validate_repository_allowlist(issue_payload)
         connection = await _get_connection_or_raise(
             session,
@@ -161,7 +206,42 @@ async def execute_approved_github_issue_action(
             proposal=proposal,
             detail=exc.detail,
             confirmation_received=True,
+            actor_user_id=input_payload.requested_by_user_id,
         )
+        raise
+
+    claimed_at = datetime.now(timezone.utc)
+    execution = ActionExecution(
+        action_proposal_id=proposal.id,
+        workspace_id=workspace_id,
+        requested_by_user_id=input_payload.requested_by_user_id,
+        connection_id=connection.id,
+        client_idempotency_key=idempotency_key,
+        request_hash=request_hash,
+        status=ACTION_EXECUTION_STATUS_CLAIMED,
+        claimed_at=claimed_at,
+        provider_response={},
+    )
+    session.add(execution)
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        concurrent_execution = (
+            await _get_execution_by_idempotency_key(
+                session,
+                workspace_id=workspace_id,
+                idempotency_key=idempotency_key,
+            )
+            or await _get_active_or_successful_execution(
+                session,
+                proposal_id=proposal_id,
+            )
+        )
+        if concurrent_execution is not None:
+            raise GitHubIssueExecutionConflictError(
+                GITHUB_ISSUE_EXECUTION_IN_PROGRESS
+            ) from exc
         raise
 
     await _append_execution_audit_event(
@@ -172,42 +252,35 @@ async def execute_approved_github_issue_action(
         message="Execution confirmation received for approved GitHub issue proposal.",
         confirmation_received=True,
         external_execution_enabled=True,
-        reason="confirmation_received",
-        event_metadata={"proposal_status": proposal.status},
+        reason=f"{execution.id}:confirmation_received",
+        actor_user_id=input_payload.requested_by_user_id,
+        event_metadata={
+            "execution_id": str(execution.id),
+            "proposal_status": proposal.status,
+        },
     )
-
-    started_at = datetime.now(timezone.utc)
-    execution = ActionExecution(
-        action_proposal_id=proposal.id,
-        started_at=started_at,
-        provider_response={
-            "idempotency_key": _optional_text(input_payload.idempotency_key),
-        }
-        if _optional_text(input_payload.idempotency_key)
-        else {},
-    )
-    session.add(execution)
-    await session.flush()
-
     await _append_execution_audit_event(
         session,
         proposal=proposal,
-        event_type=ACTION_EXECUTION_EVENT_STARTED,
+        event_type=ACTION_EXECUTION_EVENT_CLAIMED,
         status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
-        message="GitHub issue execution attempt started after non-provider gates passed.",
+        message="A durable execution claim was recorded before the provider request.",
         confirmation_received=True,
         external_execution_enabled=True,
         reason=str(execution.id),
+        actor_user_id=input_payload.requested_by_user_id,
         event_metadata={
             "execution_id": str(execution.id),
-            "repository_full_name": issue_payload.repository_full_name,
+            "claimed_at": claimed_at.isoformat(),
+            "request_hash": request_hash,
         },
     )
+    await session.commit()
 
     try:
         access_token = decrypt_secret(connection.encrypted_access_token or "")
     except SecretEncryptionError as exc:
-        await _mark_failed(
+        await _mark_pre_provider_failed(
             session,
             proposal=proposal,
             execution=execution,
@@ -219,44 +292,86 @@ async def execute_approved_github_issue_action(
             execution=execution,
             message=GITHUB_ISSUE_EXECUTION_TOKEN_UNAVAILABLE,
             error_code="token_unavailable",
+            actor_user_id=input_payload.requested_by_user_id,
         )
+        await session.commit()
         raise GitHubIssueProviderExecutionError(
             GITHUB_ISSUE_EXECUTION_TOKEN_UNAVAILABLE
         ) from exc
+
+    execution.status = ACTION_EXECUTION_STATUS_RUNNING
+    execution.started_at = datetime.now(timezone.utc)
+    await _append_execution_audit_event(
+        session,
+        proposal=proposal,
+        event_type=ACTION_EXECUTION_EVENT_STARTED,
+        status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+        message="GitHub issue execution started after the durable claim was committed.",
+        confirmation_received=True,
+        external_execution_enabled=True,
+        reason=str(execution.id),
+        actor_user_id=input_payload.requested_by_user_id,
+        event_metadata={
+            "execution_id": str(execution.id),
+            "repository_full_name": issue_payload.repository_full_name,
+        },
+    )
+    await session.commit()
+
+    try:
+        await _validate_evidence_for_live_execution(
+            session,
+            workspace_id=workspace_id,
+            proposal=proposal,
+        )
+    except GitHubIssueExecutionConflictError as exc:
+        await _mark_pre_provider_failed(
+            session,
+            proposal=proposal,
+            execution=execution,
+            message=exc.detail,
+        )
+        await _append_failed_execution_event(
+            session,
+            proposal=proposal,
+            execution=execution,
+            message=exc.detail,
+            error_code="proposal_evidence_invalid",
+            actor_user_id=input_payload.requested_by_user_id,
+        )
+        await session.commit()
+        raise
 
     try:
         raw_response = await create_issue(
             access_token=access_token,
             repository_full_name=issue_payload.repository_full_name,
             title=issue_payload.title,
-            body=issue_payload.body,
+            body=_body_with_execution_marker(
+                issue_payload.body,
+                execution=execution,
+            ),
             labels=issue_payload.labels,
             assignees=issue_payload.assignees,
         )
-    except GitHubIssueClientError as exc:
-        message = _sanitize_error_message(exc.detail, access_token=access_token)
-        await _mark_failed(
+    except Exception as exc:
+        await _mark_uncertain(
             session,
             proposal=proposal,
             execution=execution,
-            message=message,
+            actor_user_id=input_payload.requested_by_user_id,
         )
-        await _append_failed_execution_event(
-            session,
-            proposal=proposal,
-            execution=execution,
-            message=message,
-            error_code="provider_execution_failed",
-        )
-        raise GitHubIssueProviderExecutionError(message) from exc
+        await session.commit()
+        raise GitHubIssueProviderExecutionError(
+            GITHUB_ISSUE_EXECUTION_OUTCOME_UNCERTAIN
+        ) from exc
 
     sanitized_response = sanitize_github_issue_response(raw_response)
-    idempotency_key = _optional_text(input_payload.idempotency_key)
-    if idempotency_key:
-        sanitized_response["idempotency_key"] = idempotency_key[:255]
+    sanitized_response["idempotency_key"] = idempotency_key
     execution.status = ACTION_EXECUTION_STATUS_SUCCEEDED
     execution.provider_response = sanitized_response
     execution.external_id = _external_id_from_response(sanitized_response)
+    execution.error_message = None
     execution.finished_at = datetime.now(timezone.utc)
     proposal.status = ACTION_PROPOSAL_STATUS_EXECUTED
     await session.flush()
@@ -271,6 +386,7 @@ async def execute_approved_github_issue_action(
         confirmation_received=True,
         external_execution_enabled=True,
         reason=str(execution.id),
+        actor_user_id=input_payload.requested_by_user_id,
         external_result_id=_external_result_id_from_response(sanitized_response),
         external_result_url=_external_result_url_from_response(sanitized_response),
         event_metadata={
@@ -279,6 +395,7 @@ async def execute_approved_github_issue_action(
             "provider_state": sanitized_response.get("state"),
         },
     )
+    await session.commit()
     return _execution_result(proposal=proposal, execution=execution)
 
 
@@ -341,11 +458,18 @@ def _execution_result(
         "execution": {
             "id": execution.id,
             "status": execution.status,
+            "workspace_id": execution.workspace_id,
+            "requested_by_user_id": execution.requested_by_user_id,
+            "connection_id": execution.connection_id,
+            "client_idempotency_key": execution.client_idempotency_key,
+            "request_hash": execution.request_hash,
             "external_id": execution.external_id,
             "provider_response": execution.provider_response or {},
             "error_message": execution.error_message,
+            "claimed_at": execution.claimed_at,
             "started_at": execution.started_at,
             "finished_at": execution.finished_at,
+            "reconciled_at": execution.reconciled_at,
         },
         "is_live": True,
         "external_write_performed": execution.status == ACTION_EXECUTION_STATUS_SUCCEEDED,
@@ -360,12 +484,16 @@ async def _get_proposal_or_raise(
     *,
     workspace_id: UUID,
     proposal_id: UUID,
+    for_update: bool = False,
 ) -> ActionProposal:
-    proposal = await session.scalar(
+    statement = (
         select(ActionProposal)
         .where(ActionProposal.workspace_id == workspace_id)
         .where(ActionProposal.id == proposal_id)
     )
+    if for_update:
+        statement = statement.with_for_update()
+    proposal = await session.scalar(statement)
     if proposal is None:
         raise GitHubIssueExecutionNotFoundError(
             GITHUB_ISSUE_EXECUTION_PROPOSAL_NOT_FOUND
@@ -385,9 +513,22 @@ def _validate_proposal_for_execution(proposal: ActionProposal) -> None:
         raise GitHubIssueExecutionError(GITHUB_ISSUE_EXECUTION_UNSUPPORTED_ACTION)
 
 
-def _validate_evidence_for_live_execution(proposal: ActionProposal) -> None:
+async def _validate_evidence_for_live_execution(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    proposal: ActionProposal,
+) -> None:
     if not proposal.evidence_refs:
         raise GitHubIssueExecutionConflictError(GITHUB_ISSUE_EXECUTION_EVIDENCE_REQUIRED)
+    try:
+        await validate_action_proposal_evidence(
+            session,
+            workspace_id=workspace_id,
+            proposal=proposal,
+        )
+    except ActionProposalEvidenceValidationError as exc:
+        raise GitHubIssueExecutionConflictError(exc.detail) from exc
 
 
 def _validate_repository_allowlist(issue_payload: GitHubIssuePayload) -> None:
@@ -444,7 +585,21 @@ async def _get_connection_or_raise(
     return connection
 
 
-async def _get_successful_execution(
+async def _get_execution_by_idempotency_key(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    idempotency_key: str,
+) -> ActionExecution | None:
+    return await session.scalar(
+        select(ActionExecution)
+        .where(ActionExecution.workspace_id == workspace_id)
+        .where(ActionExecution.client_idempotency_key == idempotency_key)
+        .order_by(ActionExecution.created_at.asc(), ActionExecution.id.asc())
+    )
+
+
+async def _get_active_or_successful_execution(
     session: AsyncSession,
     *,
     proposal_id: UUID,
@@ -452,12 +607,75 @@ async def _get_successful_execution(
     return await session.scalar(
         select(ActionExecution)
         .where(ActionExecution.action_proposal_id == proposal_id)
-        .where(ActionExecution.status == ACTION_EXECUTION_STATUS_SUCCEEDED)
+        .where(
+            ActionExecution.status.in_(
+                (
+                    ACTION_EXECUTION_STATUS_CLAIMED,
+                    ACTION_EXECUTION_STATUS_RUNNING,
+                    ACTION_EXECUTION_STATUS_SUCCEEDED,
+                    ACTION_EXECUTION_STATUS_UNCERTAIN,
+                )
+            )
+        )
         .order_by(ActionExecution.created_at.asc(), ActionExecution.id.asc())
     )
 
 
-async def _mark_failed(
+async def _resolve_existing_execution(
+    session: AsyncSession,
+    *,
+    proposal: ActionProposal,
+    execution: ActionExecution,
+    request_hash: str | None,
+    actor_user_id: UUID,
+) -> dict[str, Any]:
+    if (
+        execution.action_proposal_id != proposal.id
+        or (request_hash is not None and execution.request_hash != request_hash)
+    ):
+        raise GitHubIssueExecutionConflictError(
+            GITHUB_ISSUE_EXECUTION_IDEMPOTENCY_REUSED
+        )
+
+    if execution.status == ACTION_EXECUTION_STATUS_SUCCEEDED:
+        await _append_execution_audit_event(
+            session,
+            proposal=proposal,
+            event_type=ACTION_EXECUTION_EVENT_DUPLICATE_RETURNED_EXISTING_RECEIPT,
+            status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+            message=GITHUB_ISSUE_EXECUTION_DUPLICATE_RECEIPT,
+            confirmation_received=True,
+            external_execution_enabled=True,
+            reason=f"{execution.id}:{actor_user_id}:duplicate_successful_receipt",
+            actor_user_id=actor_user_id,
+            external_result_id=_external_result_id_from_response(
+                execution.provider_response or {}
+            ),
+            external_result_url=_external_result_url_from_response(
+                execution.provider_response or {}
+            ),
+            event_metadata={
+                "execution_id": str(execution.id),
+                "proposal_status": proposal.status,
+            },
+        )
+        return _execution_result(
+            proposal=proposal,
+            execution=execution,
+            warnings=[GITHUB_ISSUE_EXECUTION_DUPLICATE_RECEIPT],
+        )
+
+    if execution.status in {
+        ACTION_EXECUTION_STATUS_CLAIMED,
+        ACTION_EXECUTION_STATUS_RUNNING,
+        ACTION_EXECUTION_STATUS_UNCERTAIN,
+    }:
+        raise GitHubIssueExecutionConflictError(GITHUB_ISSUE_EXECUTION_IN_PROGRESS)
+
+    raise GitHubIssueExecutionConflictError(GITHUB_ISSUE_EXECUTION_RETRY_KEY_REQUIRED)
+
+
+async def _mark_pre_provider_failed(
     session: AsyncSession,
     *,
     proposal: ActionProposal,
@@ -467,10 +685,102 @@ async def _mark_failed(
     execution.status = ACTION_EXECUTION_STATUS_FAILED
     execution.error_message = message
     execution.finished_at = datetime.now(timezone.utc)
-    proposal.status = ACTION_PROPOSAL_STATUS_FAILED
+    proposal.status = ACTION_PROPOSAL_STATUS_APPROVED
     await session.flush()
     await session.refresh(proposal)
     await session.refresh(execution)
+
+
+async def _mark_uncertain(
+    session: AsyncSession,
+    *,
+    proposal: ActionProposal,
+    execution: ActionExecution,
+    actor_user_id: UUID,
+) -> None:
+    execution.status = ACTION_EXECUTION_STATUS_UNCERTAIN
+    execution.error_message = GITHUB_ISSUE_EXECUTION_OUTCOME_UNCERTAIN
+    execution.finished_at = None
+    await _append_execution_audit_event(
+        session,
+        proposal=proposal,
+        event_type=ACTION_EXECUTION_EVENT_OUTCOME_UNCERTAIN,
+        status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+        message=(
+            "The provider request may have completed, but no authoritative "
+            "receipt was recorded. Reconciliation is required."
+        ),
+        confirmation_received=True,
+        external_execution_enabled=True,
+        reason=str(execution.id),
+        actor_user_id=actor_user_id,
+        error_code="provider_outcome_uncertain",
+        error_message=GITHUB_ISSUE_EXECUTION_OUTCOME_UNCERTAIN,
+        event_metadata={
+            "execution_id": str(execution.id),
+            "request_hash": execution.request_hash,
+        },
+    )
+    await session.flush()
+
+
+def _required_idempotency_key(value: Any) -> str:
+    normalized = _optional_text(value)
+    if normalized is None or len(normalized) < 8:
+        raise GitHubIssueExecutionError(GITHUB_ISSUE_EXECUTION_IDEMPOTENCY_REQUIRED)
+    return normalized[:255]
+
+
+def _execution_request_hash(
+    *,
+    proposal: ActionProposal,
+    workspace_id: UUID,
+    connection_id: UUID,
+    requested_by_user_id: UUID,
+) -> str:
+    material = {
+        "workspace_id": str(workspace_id),
+        "proposal_id": str(proposal.id),
+        "proposal_updated_at": proposal.updated_at.isoformat(),
+        "target_provider": proposal.target_provider,
+        "action_type": proposal.action_type,
+        "payload": proposal.payload or {},
+        "evidence_refs": proposal.evidence_refs or [],
+        "connection_id": str(connection_id),
+        "requested_by_user_id": str(requested_by_user_id),
+    }
+    encoded = json.dumps(
+        material,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def execution_request_marker(execution: ActionExecution) -> str:
+    return f"<!-- founderos-execution:{execution.id}:{execution.request_hash} -->"
+
+
+def _validate_body_marker_capacity(body: str | None) -> None:
+    placeholder_marker = (
+        "<!-- founderos-execution:"
+        "00000000-0000-0000-0000-000000000000:"
+        f"{'0' * 64} -->"
+    )
+    separator = "\n\n" if body else ""
+    combined = f"{body or ''}{separator}{placeholder_marker}"
+    if len(combined.encode("utf-8")) > GITHUB_ISSUE_BODY_MAX_BYTES:
+        raise GitHubIssueExecutionError(GITHUB_ISSUE_EXECUTION_BODY_TOO_LARGE)
+
+
+def _body_with_execution_marker(
+    body: str | None,
+    *,
+    execution: ActionExecution,
+) -> str:
+    marker = execution_request_marker(execution)
+    return f"{body}\n\n{marker}" if body else marker
 
 
 def _required_text(value: Any, message: str) -> str:
@@ -524,14 +834,6 @@ def _first_secret_like_key(payload: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _sanitize_error_message(message: str, *, access_token: str) -> str:
-    sanitized = message.replace(access_token, "[redacted]")
-    lower = sanitized.casefold()
-    if any(marker in lower for marker in SECRET_LIKE_KEYS):
-        return "github issue creation failed"
-    return sanitized[:500] or "github issue creation failed"
-
-
 def _external_id_from_response(response: Mapping[str, Any]) -> str | None:
     for key in ("html_url", "id", "number", "url"):
         value = response.get(key)
@@ -581,13 +883,23 @@ def _execution_receipt(
         "provider_result": (
             "succeeded"
             if execution.status == ACTION_EXECUTION_STATUS_SUCCEEDED
-            else "failed"
+            else (
+                "uncertain"
+                if execution.status == ACTION_EXECUTION_STATUS_UNCERTAIN
+                else "failed"
+            )
         ),
-        "error_code": "provider_execution_failed"
-        if execution.status == ACTION_EXECUTION_STATUS_FAILED
-        else None,
+        "error_code": (
+            "provider_execution_failed"
+            if execution.status == ACTION_EXECUTION_STATUS_FAILED
+            else (
+                "provider_outcome_uncertain"
+                if execution.status == ACTION_EXECUTION_STATUS_UNCERTAIN
+                else None
+            )
+        ),
         "error_message": execution.error_message,
-        "idempotency_key": _optional_text(provider_response.get("idempotency_key")),
+        "idempotency_key": execution.client_idempotency_key,
         "created_at": execution.created_at,
         "updated_at": execution.updated_at,
     }
@@ -599,6 +911,7 @@ async def _append_blocked_execution_event(
     proposal: ActionProposal,
     detail: str,
     confirmation_received: bool,
+    actor_user_id: UUID,
 ) -> None:
     await _append_execution_audit_event(
         session,
@@ -621,6 +934,7 @@ async def _append_blocked_execution_event(
         confirmation_received=confirmation_received,
         external_execution_enabled=True,
         reason=_error_code_from_detail(detail),
+        actor_user_id=actor_user_id,
         error_code=_error_code_from_detail(detail),
         error_message=detail,
         event_metadata={
@@ -637,6 +951,7 @@ async def _append_failed_execution_event(
     execution: ActionExecution,
     message: str,
     error_code: str,
+    actor_user_id: UUID,
 ) -> None:
     await _append_execution_audit_event(
         session,
@@ -647,6 +962,7 @@ async def _append_failed_execution_event(
         confirmation_received=True,
         external_execution_enabled=True,
         reason=str(execution.id),
+        actor_user_id=actor_user_id,
         error_code=error_code,
         error_message=message,
         event_metadata={"execution_id": str(execution.id)},
@@ -663,6 +979,7 @@ async def _append_execution_audit_event(
     confirmation_received: bool,
     external_execution_enabled: bool,
     reason: str,
+    actor_user_id: UUID,
     event_metadata: Mapping[str, Any] | None = None,
     external_result_id: str | None = None,
     external_result_url: str | None = None,
@@ -674,7 +991,7 @@ async def _append_execution_audit_event(
         workspace_id=proposal.workspace_id,
         action_proposal_id=proposal.id,
         event_type=event_type,
-        actor="workspace_admin",
+        actor=f"user:{actor_user_id}",
         status=status,
         message=message,
         idempotency_key=execution_event_idempotency_key(
@@ -704,8 +1021,6 @@ def _error_code_from_detail(detail: str) -> str:
 
 
 def _repository_metadata(proposal: ActionProposal) -> dict[str, str]:
-    if not isinstance(proposal.payload, Mapping):
-        return {}
     repository_full_name = proposal.payload.get("repository_full_name")
     if not isinstance(repository_full_name, str) or not repository_full_name.strip():
         return {}

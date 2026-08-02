@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -10,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.integration_models import (
     INTEGRATION_CONNECTION_STATUS_CONNECTED,
     INTEGRATION_PROVIDER_GITHUB,
+    SYNC_JOB_STATUS_CANCELLED,
+    SYNC_JOB_STATUS_FAILED,
+    SYNC_JOB_STATUS_PARTIAL,
     SYNC_JOB_STATUS_QUEUED,
+    SYNC_JOB_STATUS_SUCCEEDED,
     SYNC_JOB_TYPE_MANUAL,
     IntegrationConnection,
     SyncJob,
@@ -21,6 +26,8 @@ GITHUB_SYNC_JOB_NO_EXECUTION_WARNING = (
 )
 GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND = "github connection not found"
 GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED = "github connection must be connected"
+GITHUB_SYNC_JOB_NOT_FOUND = "github sync job not found"
+GITHUB_SYNC_JOB_ALREADY_FINISHED = "github sync job is already finished"
 
 
 @dataclass(frozen=True)
@@ -108,7 +115,60 @@ async def get_github_sync_job(
     return serialize_github_sync_job(sync_job)
 
 
+async def request_github_sync_job_cancellation(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    sync_job_id: UUID,
+    requested_by: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    sync_job = await session.scalar(
+        select(SyncJob)
+        .where(SyncJob.workspace_id == workspace_id)
+        .where(SyncJob.provider == INTEGRATION_PROVIDER_GITHUB)
+        .where(SyncJob.id == sync_job_id)
+        .with_for_update()
+    )
+    if sync_job is None:
+        raise GitHubSyncJobError(GITHUB_SYNC_JOB_NOT_FOUND)
+    if sync_job.status in {
+        SYNC_JOB_STATUS_SUCCEEDED,
+        SYNC_JOB_STATUS_FAILED,
+        SYNC_JOB_STATUS_PARTIAL,
+        SYNC_JOB_STATUS_CANCELLED,
+    }:
+        raise GitHubSyncJobError(GITHUB_SYNC_JOB_ALREADY_FINISHED)
+
+    requested_at = now or datetime.now(timezone.utc)
+    sync_job.cancel_requested_at = requested_at
+    sync_job.logs = [
+        *(sync_job.logs or []),
+        {
+            "event": "cancellation_requested",
+            "requested_by": requested_by,
+            "at": requested_at.isoformat(),
+        },
+    ]
+    sync_job.status = SYNC_JOB_STATUS_CANCELLED
+    sync_job.finished_at = requested_at
+    sync_job.lease_owner = None
+    sync_job.lease_expires_at = None
+    sync_job.error_message = None
+    await session.flush()
+    await session.refresh(sync_job)
+    return serialize_github_sync_job(sync_job)
+
+
 def serialize_github_sync_job(sync_job: SyncJob) -> dict[str, Any]:
+    request = _live_sync_request(sync_job.cursor_before)
+    progress = _progress(sync_job.cursor_after)
+    execution_started = sync_job.attempt_count > 0
+    warnings = (
+        []
+        if request is not None
+        else [GITHUB_SYNC_JOB_NO_EXECUTION_WARNING]
+    )
     return {
         "id": sync_job.id,
         "workspace_id": sync_job.workspace_id,
@@ -125,11 +185,16 @@ def serialize_github_sync_job(sync_job: SyncJob) -> dict[str, Any]:
         "records_updated": sync_job.records_updated,
         "error_message": sync_job.error_message,
         "logs": _serialize_logs(sync_job.logs),
+        "attempt_count": sync_job.attempt_count,
+        "max_attempts": sync_job.max_attempts,
+        "next_attempt_at": sync_job.next_attempt_at,
+        "cancel_requested_at": sync_job.cancel_requested_at,
+        "progress": progress,
         "created_at": sync_job.created_at,
         "updated_at": sync_job.updated_at,
-        "is_live": False,
-        "execution_started": False,
-        "warnings": [GITHUB_SYNC_JOB_NO_EXECUTION_WARNING],
+        "is_live": request is not None and execution_started,
+        "execution_started": execution_started,
+        "warnings": warnings,
     }
 
 
@@ -156,3 +221,17 @@ def _serialize_logs(value: list[dict[str, Any]] | None) -> dict[str, Any] | None
     if value is None:
         return None
     return {"events": value}
+
+
+def _live_sync_request(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    request = value.get("github_app_live_sync")
+    return request if isinstance(request, dict) else None
+
+
+def _progress(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    progress = value.get("github_app_live_sync_progress")
+    return progress if isinstance(progress, dict) else None

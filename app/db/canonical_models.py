@@ -23,6 +23,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     JSON,
@@ -84,9 +85,35 @@ class SourceRecord(Base):
             "external_id",
             name="uq_source_records_workspace_provider_external_id",
         ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_source_records_workspace_id_id",
+        ),
         Index("ix_source_records_workspace_record_type", "workspace_id", "record_type"),
+        Index(
+            "ix_source_records_workspace_provider_deleted",
+            "workspace_id",
+            "provider",
+            "is_deleted",
+        ),
         Index("ix_source_records_payload_hash", "payload_hash"),
         Index("ix_source_records_source_updated_at", "source_updated_at"),
+        CheckConstraint(
+            "("
+            "is_deleted = false "
+            "and tombstoned_at is null "
+            "and tombstone_observed_at is null "
+            "and tombstone_sync_job_id is null "
+            "and tombstone_reason is null"
+            ") or ("
+            "is_deleted = true "
+            "and tombstoned_at is not null "
+            "and tombstone_observed_at is not null "
+            "and tombstone_reason is not null"
+            ")",
+            name="ck_source_records_tombstone_provenance",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -120,6 +147,24 @@ class SourceRecord(Base):
         index=True,
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    tombstoned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    tombstone_observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    tombstone_sync_job_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "sync_jobs.id",
+            name="fk_source_records_tombstone_sync_job_id",
+        ),
+        nullable=True,
+        index=True,
+    )
+    tombstone_reason: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -134,6 +179,11 @@ class EvidenceRef(Base):
 
     __tablename__ = "evidence_refs"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_record_id"],
+            ["source_records.workspace_id", "source_records.id"],
+            name="fk_evidence_refs_workspace_source_record",
+        ),
         Index("ix_evidence_refs_workspace_id", "workspace_id"),
         Index("ix_evidence_refs_source_record_id", "source_record_id"),
         Index("ix_evidence_refs_entity_id", "entity_id"),
@@ -148,7 +198,6 @@ class EvidenceRef(Base):
     )
     source_record_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("source_records.id", name="fk_evidence_refs_source_record_id"),
     )
     entity_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     quote: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -183,6 +232,11 @@ class Repository(Base):
             "provider",
             "full_name",
             name="uq_repositories_workspace_provider_full_name",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_repositories_workspace_id_id",
         ),
     )
 
@@ -222,6 +276,16 @@ class PullRequest(Base):
 
     __tablename__ = "pull_requests"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "repository_id"],
+            ["repositories.workspace_id", "repositories.id"],
+            name="fk_pull_requests_workspace_repository",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_record_id"],
+            ["source_records.workspace_id", "source_records.id"],
+            name="fk_pull_requests_workspace_source_record",
+        ),
         CheckConstraint(
             "state in ('open', 'closed', 'merged')",
             name="ck_pull_requests_state",
@@ -244,9 +308,13 @@ class PullRequest(Base):
     )
     repository_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("repositories.id", name="fk_pull_requests_repository_id"),
     )
     external_id: Mapped[str] = mapped_column(String(255))
+    source_record_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
     number: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(500))
     state: Mapped[str] = mapped_column(String(20), index=True)
@@ -278,6 +346,11 @@ class Task(Base):
 
     __tablename__ = "tasks"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_record_id"],
+            ["source_records.workspace_id", "source_records.id"],
+            name="fk_tasks_workspace_source_record",
+        ),
         CheckConstraint(
             "source_provider in ('github', 'jira', 'internal')",
             name="ck_tasks_source_provider",
@@ -310,7 +383,6 @@ class Task(Base):
     source_provider: Mapped[str] = mapped_column(String(40))
     source_record_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("source_records.id", name="fk_tasks_source_record_id"),
         nullable=True,
         index=True,
     )

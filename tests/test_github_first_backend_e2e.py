@@ -41,6 +41,7 @@ def _set_auth(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "api_auth_key", SecretStr("test-api-key"))
     monkeypatch.setattr(settings, "secret_encryption_key", SecretStr("test-encryption-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
+    monkeypatch.setattr(settings, "enable_real_connectors", True)
     monkeypatch.setattr(settings, "enable_write_actions", True)
     monkeypatch.setattr(
         settings,
@@ -187,7 +188,7 @@ def _fake_repository() -> dict:
         "evidence_refs": [
             {
                 "kind": "repository_inventory_snapshot",
-                "source": "backend_e2e_test",
+                "source": "repository_inventory",
                 "ref": FAKE_REPOSITORY_FULL_NAME,
                 "url": None,
             }
@@ -460,7 +461,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
                     "evidence_refs": [
                         {
                             "kind": "repository",
-                            "source": "backend_e2e_test",
+                            "source": "repository_inventory",
                             "ref": FAKE_REPOSITORY_FULL_NAME,
                             "url": None,
                         }
@@ -481,6 +482,10 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
                 f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
+                json={
+                    "idempotency_key": f"backend-e2e-approve-{proposal_id}",
+                    "proposal_version": proposal["proposal_version"],
+                },
             )
             response_texts.append(approve_response.text)
             assert approve_response.status_code == 200, approve_response.text

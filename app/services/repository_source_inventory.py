@@ -38,10 +38,11 @@ async def load_repository_source_inventory(
 ) -> dict[str, Any]:
     """Build the current repository inventory read model.
 
-    Precedence is canonical Repository/Postgres rows first when a workspace is
-    known, retained SourceEvent/Postgres compatibility second, saved GitHub
-    discovery snapshots third, and the static repository portfolio only as a
-    legacy seed fallback. The function is read-only and never calls providers.
+    Product reads with a workspace id are fail-closed: only canonical
+    Repository rows for that exact workspace may be returned. Retained
+    SourceEvent rows and filesystem discovery snapshots have no workspace key,
+    so they are available only to unscoped operator/script reads. The function
+    is read-only and never calls providers.
     """
 
     safe_now = now or datetime.now(timezone.utc)
@@ -60,6 +61,19 @@ async def load_repository_source_inventory(
                 legacy_items=legacy_items,
                 now=safe_now,
                 canonical_repo_count=len(canonical_items),
+                source_event_count=0,
+                discovery_snapshot=_empty_snapshot(),
+            )
+        )
+
+    if workspace_id is not None:
+        return _finalize(
+            _inventory_payload(
+                source_class=INVENTORY_CANONICAL_REPOSITORIES,
+                items=[],
+                legacy_items=legacy_items,
+                now=safe_now,
+                canonical_repo_count=0,
                 source_event_count=0,
                 discovery_snapshot=_empty_snapshot(),
             )
@@ -305,8 +319,6 @@ def _discovery_items(
 def _legacy_seed_items() -> list[dict[str, Any]]:
     items = []
     for entry in repository_portfolio_catalog():
-        if not isinstance(entry, Mapping):
-            continue
         repo_key = _safe_repo_part(entry.get("repo_key"))
         if repo_key is None:
             continue
@@ -406,7 +418,10 @@ def _reconcile(
 
 def _latest_raw_repos_path(workspace: Path) -> Path | None:
     candidates = sorted((workspace / "discovery" / "github").glob("*/raw/repos.json"))
-    return candidates[-1] if candidates else None
+    if candidates:
+        return candidates[-1]
+    root_repos = workspace / "repos.json"
+    return root_repos if root_repos.exists() else None
 
 
 def _snapshot_meta(*, path: Path, workspace: Path, now: datetime) -> dict[str, Any]:
@@ -415,11 +430,7 @@ def _snapshot_meta(*, path: Path, workspace: Path, now: datetime) -> dict[str, A
     except OSError:
         return _empty_snapshot()
     relative = _safe_relative(path, workspace)
-    snapshot_id = None
-    try:
-        snapshot_id = path.parents[1].name
-    except IndexError:
-        snapshot_id = None
+    snapshot_id = _snapshot_id_from_path(path=path, workspace=workspace)
     return {
         "available": True,
         "status": "available",
@@ -429,6 +440,17 @@ def _snapshot_meta(*, path: Path, workspace: Path, now: datetime) -> dict[str, A
         "modified_at": modified.isoformat(),
         "snapshot_age_seconds": max(0, int((now - modified).total_seconds())),
     }
+
+
+def _snapshot_id_from_path(*, path: Path, workspace: Path) -> str | None:
+    try:
+        if path.parent == workspace and path.name == "repos.json":
+            return "local-root-repos"
+        if path.name == "repos.json" and path.parent.name == "raw":
+            return path.parents[1].name
+    except IndexError:
+        return None
+    return None
 
 
 def _empty_snapshot() -> dict[str, Any]:

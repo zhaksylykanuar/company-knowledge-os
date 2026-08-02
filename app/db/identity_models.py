@@ -24,6 +24,7 @@ MEMBERSHIP_ROLE_OWNER = "owner"
 MEMBERSHIP_ROLE_ADMIN = "admin"
 MEMBERSHIP_ROLE_MEMBER = "member"
 MEMBERSHIP_ROLE_VIEWER = "viewer"
+ACCOUNT_SETUP_TOKEN_PURPOSE_TEAM_INVITE = "team_invite"
 
 
 class User(Base):
@@ -149,6 +150,115 @@ class LoginAttempt(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class AccountSetupToken(Base):
+    """One-time token for local teammate password setup.
+
+    Stores ONLY a sha256 token hash. The raw setup token is returned once to the
+    admin UI and is never persisted, mirroring the server-side session-token
+    storage rule.
+    """
+
+    __tablename__ = "account_setup_tokens"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_account_setup_tokens_token_hash"),
+        CheckConstraint(
+            "purpose in ('team_invite')",
+            name="ck_account_setup_tokens_purpose",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_account_setup_tokens_user_id", ondelete="CASCADE"),
+        index=True,
+    )
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            name="fk_account_setup_tokens_created_by_user_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    purpose: Mapped[str] = mapped_column(
+        String(40), default=ACCOUNT_SETUP_TOKEN_PURPOSE_TEAM_INVITE, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+
+
+class FounderEnrollmentInvite(Base):
+    """One-time operator-issued invitation for initial founder enrollment.
+
+    Only a SHA-256 digest of the opaque invitation token is persisted.  The
+    consumption metadata is written in the same transaction that creates the
+    founder, workspace, owner membership, and browser session.
+    """
+
+    __tablename__ = "founder_enrollment_invites"
+    __table_args__ = (
+        UniqueConstraint(
+            "token_hash",
+            name="uq_founder_enrollment_invites_token_hash",
+        ),
+        CheckConstraint(
+            "consumed_at is not null or "
+            "(consumed_by_user_id is null and consumed_workspace_id is null)",
+            name="ck_founder_enrollment_invites_consumption_metadata",
+        ),
+        CheckConstraint(
+            "consumed_at is null or revoked_at is null",
+            name="ck_founder_enrollment_invites_not_consumed_and_revoked",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    consumed_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            name="fk_founder_enrollment_invites_consumed_by_user_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+    consumed_workspace_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "workspaces.id",
+            name="fk_founder_enrollment_invites_consumed_workspace_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
     )
 
 

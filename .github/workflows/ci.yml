@@ -20,21 +20,26 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16@sha256:081f1bc7bd5e143dbb6e487b710bbc27712cdcfaced4c071b8e47349aa1b4171
+        image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
         env:
           POSTGRES_USER: ckdos
           POSTGRES_PASSWORD: ckdos_dev_password
-          POSTGRES_DB: ckdos
+          POSTGRES_DB: ckdos_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U ckdos -d ckdos"
+          --health-cmd "pg_isready -U ckdos -d ckdos_test"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
 
     env:
-      DATABASE_URL: postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos
+      APP_ENV: test
+      FOUNDEROS_TEST_DATABASE_URL: postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos_test
+      FOUNDEROS_DISABLE_DOTENV: "true"
+      ENABLE_LLM: "false"
+      ENABLE_WRITE_ACTIONS: "false"
+      FOUNDEROS_ENABLE_REAL_CONNECTORS: "false"
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -61,14 +66,28 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: Static typing
+        run: uv run mypy app
+
+      - name: Audit Python dependencies
+        run: uv run pip-audit --local --progress-spinner off
+
       - name: Apply migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos_test
         run: uv run alembic upgrade head
+
+      - name: Verify migration metadata
+        env:
+          DATABASE_URL: postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos_test
+        run: uv run alembic check
 
       - name: Docs and smoke contract tests
         run: >-
           uv run pytest -q
           tests/test_docs_navigation_integrity.py
-          tests/test_private_beta_smoke.py
+          tests/test_local_runtime_docs.py
+          tests/test_local_smoke.py
           tests/test_cors_config.py
           tests/test_ci_deploy_readiness.py
 
@@ -80,7 +99,7 @@ jobs:
         run: uv cache prune --ci
 
   frontend:
-    name: Frontend deploy-readiness checks
+    name: Frontend checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -99,6 +118,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: web
         run: npm ci
+
+      - name: Audit all frontend dependencies
+        working-directory: web
+        run: npm audit --audit-level=moderate
 
       - name: Frontend tests
         working-directory: web

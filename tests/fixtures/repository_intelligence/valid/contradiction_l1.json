@@ -1,0 +1,116 @@
+{
+  "schema_version": "repository_intelligence.v1",
+  "workspace_id": "11111111-1111-4111-8111-111111111111",
+  "repository_id": "55555555-5555-4555-8555-555555555555",
+  "repository": {
+    "provider": "github",
+    "external_id": "synthetic-contradiction-505",
+    "full_name": "synthetic-company/contradiction-service",
+    "default_branch": "main",
+    "source_url": null
+  },
+  "audit_level": "L1",
+  "analysis_target": {
+    "target_status": "exact",
+    "commit_algorithm": "sha1",
+    "commit_sha": "fedcba9876543210fedcba9876543210fedcba98",
+    "metadata_snapshot_id": null
+  },
+  "profile": "backend_service",
+  "policy_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "engine_version": "ri-contract-test-1",
+  "result": {
+    "schema_version": "repository_analyzer_result.v1",
+    "purpose": {
+      "workspace_id": "11111111-1111-4111-8111-111111111111",
+      "status": "inferred",
+      "confidence": 0.72,
+      "evidence_refs": [
+        {
+          "kind": "repository_file",
+          "source": "github",
+          "ref": "synthetic-company/contradiction-service@fedcba9876543210fedcba9876543210fedcba98:README.md"
+        }
+      ],
+      "contradicting_evidence_refs": [
+        {
+          "kind": "repository_deployment",
+          "source": "github",
+          "ref": "synthetic-company/contradiction-service@fedcba9876543210fedcba9876543210fedcba98:deploy/service.yaml"
+        }
+      ],
+      "human_resolution": {
+        "status": "pending",
+        "resolved_by_user_id": null,
+        "resolved_at": null
+      },
+      "reconciliation_status": "current",
+      "claim_id": "purpose.primary",
+      "summary": "Synthetic public API according to its README.",
+      "operational_summary": null,
+      "repository_type": "backend_service"
+    },
+    "responsibilities": [
+      {
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "status": "observed",
+        "confidence": 0.89,
+        "evidence_refs": [
+          {
+            "kind": "repository_deployment",
+            "source": "github",
+            "ref": "synthetic-company/contradiction-service@fedcba9876543210fedcba9876543210fedcba98:deploy/service.yaml"
+          }
+        ],
+        "contradicting_evidence_refs": [
+          {
+            "kind": "repository_file",
+            "source": "github",
+            "ref": "synthetic-company/contradiction-service@fedcba9876543210fedcba9876543210fedcba98:README.md"
+          }
+        ],
+        "human_resolution": {
+          "status": "pending",
+          "resolved_by_user_id": null,
+          "resolved_at": null
+        },
+        "reconciliation_status": "current",
+        "claim_id": "responsibility.worker",
+        "claim_type": "implements",
+        "summary": "Current deployment config defines a background worker.",
+        "details": []
+      }
+    ],
+    "interfaces_provided": [],
+    "dependencies_consumed": [],
+    "deployment_units": [],
+    "ownership_candidates": [],
+    "relationship_candidates": [],
+    "findings": [],
+    "contradictions": [
+      {
+        "contradiction_id": "contradiction.api-vs-worker",
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "left_claim_id": "purpose.primary",
+        "right_claim_id": "responsibility.worker",
+        "status": "observed",
+        "confidence": 0.88,
+        "summary": "The README and deployment configuration describe different runtime roles.",
+        "evidence_refs": [
+          {
+            "kind": "repository_file",
+            "source": "github",
+            "ref": "synthetic-company/contradiction-service@fedcba9876543210fedcba9876543210fedcba98:README.md"
+          },
+          {
+            "kind": "repository_deployment",
+            "source": "github",
+            "ref": "synthetic-company/contradiction-service@fedcba9876543210fedcba9876543210fedcba98:deploy/service.yaml"
+          }
+        ]
+      }
+    ],
+    "unknowns": [],
+    "limitations": []
+  }
+}

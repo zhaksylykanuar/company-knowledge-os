@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.canonical_models import (
@@ -15,6 +15,7 @@ from app.db.canonical_models import (
     TASK_PROVIDER_GITHUB,
     PullRequest,
     Repository,
+    SourceRecord,
     Task,
 )
 
@@ -71,8 +72,21 @@ async def _github_issues(
     rows = (
         await session.execute(
             select(Task)
+            .outerjoin(
+                SourceRecord,
+                and_(
+                    SourceRecord.workspace_id == Task.workspace_id,
+                    SourceRecord.id == Task.source_record_id,
+                ),
+            )
             .where(Task.workspace_id == workspace_id)
             .where(Task.source_provider == TASK_PROVIDER_GITHUB)
+            .where(
+                or_(
+                    Task.source_record_id.is_(None),
+                    SourceRecord.is_deleted.is_(False),
+                )
+            )
             .order_by(
                 Task.source_updated_at.desc().nullslast(),
                 Task.updated_at.desc(),
@@ -107,7 +121,20 @@ async def _github_pull_requests(
 ) -> list[dict[str, Any]]:
     statement = (
         select(PullRequest)
+        .outerjoin(
+            SourceRecord,
+            and_(
+                SourceRecord.workspace_id == PullRequest.workspace_id,
+                SourceRecord.id == PullRequest.source_record_id,
+            ),
+        )
         .where(PullRequest.workspace_id == workspace_id)
+        .where(
+            or_(
+                PullRequest.source_record_id.is_(None),
+                SourceRecord.is_deleted.is_(False),
+            )
+        )
         .order_by(PullRequest.updated_at_source.desc().nullslast(), PullRequest.created_at.desc())
         .limit(max(limit * 3, limit))
     )
@@ -121,7 +148,9 @@ async def _github_pull_requests(
             repository.id: repository
             for repository in (
                 await session.execute(
-                    select(Repository).where(Repository.id.in_(repository_ids))
+                    select(Repository)
+                    .where(Repository.workspace_id == workspace_id)
+                    .where(Repository.id.in_(repository_ids))
                 )
             ).scalars()
         }

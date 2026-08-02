@@ -1,0 +1,24 @@
+{
+  "schema_version": "repository_intelligence.v1",
+  "repository_id": "22222222-2222-4222-8222-222222222222",
+  "repository": {
+    "provider": "github",
+    "external_id": "invalid-missing-workspace",
+    "full_name": "synthetic-company/invalid",
+    "default_branch": "main",
+    "source_url": null
+  },
+  "audit_level": "L0",
+  "analysis_target": {
+    "target_status": "unavailable",
+    "commit_algorithm": null,
+    "commit_sha": null,
+    "metadata_snapshot_id": "synthetic"
+  },
+  "profile": "backend_service",
+  "policy_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "engine_version": "ri-contract-test-1",
+  "result": {
+    "schema_version": "repository_analyzer_result.v1"
+  }
+}

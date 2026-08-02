@@ -9,11 +9,23 @@ type AppShellProps = {
   children: ReactNode;
 };
 
+export const PUBLIC_SHELL_PATHS = [
+  "/login",
+  "/setup-password",
+  "/start"
+] as const;
+
+export function isPublicShellPath(pathname: string): boolean {
+  return PUBLIC_SHELL_PATHS.some((path) => pathname === path);
+}
+
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
 
-  // /login is public — render it bare, outside the authenticated chrome/gate.
-  if (pathname === "/login") {
+  // Enrollment and password entry points render outside authenticated chrome.
+  // /onboarding itself stays behind AuthGate and uses the current session.
+  // Exact matching keeps every nested/unknown route protected by default.
+  if (isPublicShellPath(pathname)) {
     return <>{children}</>;
   }
 

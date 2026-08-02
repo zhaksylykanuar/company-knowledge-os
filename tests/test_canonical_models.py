@@ -118,6 +118,7 @@ async def test_spine_create_and_roundtrip() -> None:
             pull_request = PullRequest(
                 workspace_id=workspace.id,
                 repository_id=repository.id,
+                source_record_id=source_record.id,
                 external_id=f"pr-{marker}",
                 number=7,
                 title="Add feature",
@@ -175,10 +176,15 @@ async def test_spine_create_and_roundtrip() -> None:
         assert stored_sr.payload == {"full_name": "acme/repo", "private": True}
         assert stored_sr.payload_hash == "hash-" + marker
         assert stored_sr.is_deleted is False
+        assert stored_sr.tombstoned_at is None
+        assert stored_sr.tombstone_observed_at is None
+        assert stored_sr.tombstone_sync_job_id is None
+        assert stored_sr.tombstone_reason is None
         assert stored_repo.full_name == "acme/repo"
         assert stored_repo.visibility == REPOSITORY_VISIBILITY_PRIVATE
         assert stored_repo.repo_metadata == {"stars": 3}
         assert stored_pr.repository_id == repo_id
+        assert stored_pr.source_record_id == sr_id
         assert stored_pr.state == PULL_REQUEST_STATE_OPEN
         assert stored_task.source_record_id == sr_id
         assert stored_task.due_date == date(2026, 7, 1)
@@ -305,12 +311,114 @@ async def test_evidence_ref_source_record_fk_enforced() -> None:
                 )
             )
             with pytest.raises(
-                IntegrityError, match="fk_evidence_refs_source_record_id"
+                IntegrityError, match="fk_evidence_refs_workspace_source_record"
             ):
                 await session.commit()
             await session.rollback()
     finally:
         await _cleanup(marker)
+
+
+@pytest.mark.parametrize(
+    ("relationship", "constraint_name"),
+    [
+        ("evidence_source_record", "fk_evidence_refs_workspace_source_record"),
+        ("pull_request_repository", "fk_pull_requests_workspace_repository"),
+        ("pull_request_source_record", "fk_pull_requests_workspace_source_record"),
+        ("task_source_record", "fk_tasks_workspace_source_record"),
+    ],
+)
+async def test_cross_workspace_canonical_relationships_fail_at_commit(
+    relationship: str,
+    constraint_name: str,
+) -> None:
+    marker = uuid4().hex
+    await _cleanup(f"{marker}-a")
+    await _cleanup(f"{marker}-b")
+    try:
+        workspace_a = await _create_workspace(f"{marker}-a")
+        workspace_b = await _create_workspace(f"{marker}-b")
+        async with AsyncSessionLocal() as session:
+            source_a = SourceRecord(
+                workspace_id=workspace_a.id,
+                provider=SOURCE_RECORD_PROVIDER_GITHUB,
+                external_id=f"source-a-{marker}",
+                record_type="repository",
+                payload={},
+                payload_hash=f"source-a-{marker}",
+                observed_at=datetime(2026, 6, 24, tzinfo=timezone.utc),
+            )
+            source_b = SourceRecord(
+                workspace_id=workspace_b.id,
+                provider=SOURCE_RECORD_PROVIDER_GITHUB,
+                external_id=f"source-b-{marker}",
+                record_type="repository",
+                payload={},
+                payload_hash=f"source-b-{marker}",
+                observed_at=datetime(2026, 6, 24, tzinfo=timezone.utc),
+            )
+            repository_a = Repository(
+                workspace_id=workspace_a.id,
+                external_id=f"repo-a-{marker}",
+                name="repo-a",
+                full_name=f"acme/repo-a-{marker}",
+            )
+            repository_b = Repository(
+                workspace_id=workspace_b.id,
+                external_id=f"repo-b-{marker}",
+                name="repo-b",
+                full_name=f"acme/repo-b-{marker}",
+            )
+            session.add_all([source_a, source_b, repository_a, repository_b])
+            await session.commit()
+            source_a_id = source_a.id
+            source_b_id = source_b.id
+            repository_a_id = repository_a.id
+            repository_b_id = repository_b.id
+
+        if relationship == "evidence_source_record":
+            invalid_record = EvidenceRef(
+                workspace_id=workspace_a.id,
+                source_record_id=source_b_id,
+            )
+        elif relationship == "pull_request_repository":
+            invalid_record = PullRequest(
+                workspace_id=workspace_a.id,
+                repository_id=repository_b_id,
+                external_id=f"cross-repository-{marker}",
+                number=1,
+                title="Cross-workspace repository",
+                state=PULL_REQUEST_STATE_OPEN,
+            )
+        elif relationship == "pull_request_source_record":
+            invalid_record = PullRequest(
+                workspace_id=workspace_a.id,
+                repository_id=repository_a_id,
+                source_record_id=source_b_id,
+                external_id=f"cross-source-{marker}",
+                number=2,
+                title="Cross-workspace source",
+                state=PULL_REQUEST_STATE_OPEN,
+            )
+        else:
+            invalid_record = Task(
+                workspace_id=workspace_a.id,
+                source_provider=TASK_PROVIDER_GITHUB,
+                source_record_id=source_b_id,
+                external_id=f"cross-task-{marker}",
+                title="Cross-workspace source",
+            )
+
+        async with AsyncSessionLocal() as session:
+            session.add(invalid_record)
+            with pytest.raises(IntegrityError, match=constraint_name):
+                await session.commit()
+            await session.rollback()
+
+        assert source_a_id != source_b_id
+    finally:
+        await _cleanup(f"{marker}-a")
+        await _cleanup(f"{marker}-b")
 
 
 async def test_canonical_migration_tables_constraints_indexes_exist() -> None:
@@ -338,13 +446,17 @@ async def test_canonical_migration_tables_constraints_indexes_exist() -> None:
                         where conname in (
                           'ck_source_records_provider',
                           'uq_source_records_workspace_provider_external_id',
+                          'uq_source_records_workspace_id_id',
                           'fk_source_records_workspace_id',
                           'uq_repositories_workspace_provider_full_name',
+                          'uq_repositories_workspace_id_id',
                           'ck_repositories_visibility',
                           'ck_pull_requests_state',
-                          'fk_pull_requests_repository_id',
+                          'fk_pull_requests_workspace_repository',
+                          'fk_pull_requests_workspace_source_record',
                           'ck_tasks_source_provider',
-                          'fk_evidence_refs_source_record_id'
+                          'fk_tasks_workspace_source_record',
+                          'fk_evidence_refs_workspace_source_record'
                         )
                         """
                     )
@@ -381,13 +493,17 @@ async def test_canonical_migration_tables_constraints_indexes_exist() -> None:
     assert constraints == {
         "ck_source_records_provider",
         "uq_source_records_workspace_provider_external_id",
+        "uq_source_records_workspace_id_id",
         "fk_source_records_workspace_id",
         "uq_repositories_workspace_provider_full_name",
+        "uq_repositories_workspace_id_id",
         "ck_repositories_visibility",
         "ck_pull_requests_state",
-        "fk_pull_requests_repository_id",
+        "fk_pull_requests_workspace_repository",
+        "fk_pull_requests_workspace_source_record",
         "ck_tasks_source_provider",
-        "fk_evidence_refs_source_record_id",
+        "fk_tasks_workspace_source_record",
+        "fk_evidence_refs_workspace_source_record",
     }
     assert indexes == {
         "ix_source_records_workspace_record_type",

@@ -30,3 +30,27 @@ export function safeHref(url: string | null | undefined): string | null {
 
   return trimmed;
 }
+
+// Setup redirects carry one-time state and must only ever leave FounderOS for
+// the canonical GitHub web origin. A generic http(s) check is not sufficient
+// for this higher-trust navigation boundary.
+export function safeGitHubLaunchHref(
+  url: string | null | undefined
+): string | null {
+  const href = safeHref(url);
+  if (href === null) {
+    return null;
+  }
+
+  const parsed = new URL(href);
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.hostname !== "github.com" ||
+    parsed.port !== "" ||
+    parsed.username !== "" ||
+    parsed.password !== ""
+  ) {
+    return null;
+  }
+  return href;
+}

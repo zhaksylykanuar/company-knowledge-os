@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy import select
@@ -22,6 +25,10 @@ from app.db.action_models import (
     ACTION_TYPE_INTERNAL_TODO,
     ActionProposal,
 )
+from app.services.company_memory_event_service import (
+    append_action_proposal_created_memory_event,
+    append_action_proposal_decision_memory_event,
+)
 
 ACTION_PROPOSAL_APPROVAL_WARNING = (
     "Action approved locally. Execution is deferred to a later step."
@@ -31,6 +38,24 @@ ACTION_PROPOSAL_NO_EXECUTION_WARNING = (
 )
 ACTION_PROPOSAL_NOT_FOUND = "action proposal not found"
 ACTION_PROPOSAL_INVALID_TRANSITION = "action proposal is not in proposed status"
+ACTION_PROPOSAL_PAYLOAD_MAX_BYTES = 64 * 1024
+ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES = 64 * 1024
+ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS = 50
+ACTION_EVIDENCE_ALLOWED_KEYS = frozenset(
+    {
+        "evidence_ref_id",
+        "id",
+        "kind",
+        "record_id",
+        "ref",
+        "source",
+        "source_record_id",
+        "url",
+    }
+)
+ACTION_EVIDENCE_KIND_MAX_LENGTH = 80
+ACTION_EVIDENCE_SELECTOR_MAX_LENGTH = 500
+ACTION_EVIDENCE_SOURCE_MAX_LENGTH = 80
 
 VALID_TARGET_PROVIDERS = {
     ACTION_TARGET_PROVIDER_GITHUB,
@@ -112,6 +137,26 @@ def validate_action_proposal_input(payload: ActionProposalCreateInput) -> None:
         raise ActionProposalError("payload must be an object")
     if not isinstance(payload.evidence_refs, list):
         raise ActionProposalError("evidence_refs must be a list")
+    if len(payload.evidence_refs) > ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS:
+        raise ActionProposalError(
+            f"evidence_refs exceeds {ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS} items"
+        )
+    if any(not isinstance(ref, Mapping) for ref in payload.evidence_refs):
+        raise ActionProposalError("evidence_refs items must be objects")
+    _validate_json_byte_size(
+        payload.payload,
+        field_name="payload",
+        max_bytes=ACTION_PROPOSAL_PAYLOAD_MAX_BYTES,
+    )
+    _validate_json_byte_size(
+        payload.evidence_refs,
+        field_name="evidence_refs",
+        max_bytes=ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
+    )
+    if any(not action_evidence_ref_matches_schema(ref) for ref in payload.evidence_refs):
+        raise ActionProposalError(
+            "evidence_refs items must match the evidence_ref.v1 schema"
+        )
     if created_by not in VALID_CREATED_BY:
         raise ActionProposalError("unknown created_by")
     secret_key = _first_secret_like_key(payload.payload)
@@ -145,6 +190,10 @@ async def create_action_proposal(
     session.add(proposal)
     await session.flush()
     await session.refresh(proposal)
+    await append_action_proposal_created_memory_event(
+        session,
+        proposal=proposal,
+    )
     return proposal
 
 
@@ -202,6 +251,11 @@ async def approve_action_proposal(
     proposal.approved_at = datetime.now(timezone.utc)
     await session.flush()
     await session.refresh(proposal)
+    await append_action_proposal_decision_memory_event(
+        session,
+        proposal=proposal,
+        actor_user_id=approved_by_user_id,
+    )
     return proposal
 
 
@@ -225,6 +279,11 @@ async def reject_action_proposal(
     proposal.rejection_reason = _optional_text(reason)
     await session.flush()
     await session.refresh(proposal)
+    await append_action_proposal_decision_memory_event(
+        session,
+        proposal=proposal,
+        actor_user_id=rejected_by_user_id,
+    )
     return proposal
 
 
@@ -249,10 +308,131 @@ def serialize_action_proposal(proposal: ActionProposal) -> dict[str, Any]:
         "rejection_reason": proposal.rejection_reason,
         "created_at": proposal.created_at,
         "updated_at": proposal.updated_at,
+        "proposal_version": action_proposal_version(proposal),
         "is_live": False,
         "execution_started": False,
         "warnings": [ACTION_PROPOSAL_NO_EXECUTION_WARNING],
     }
+
+
+def action_proposal_version(proposal: ActionProposal) -> str:
+    """Return one opaque version over the exact persisted proposal row.
+
+    Canonical evidence rows may affect whether Headquarters ranks a proposal,
+    but they do not silently change the proposal command version. A local
+    decision therefore binds to the row the actor reviewed while Headquarters
+    continues to validate evidence independently.
+    """
+
+    material = {
+        "id": proposal.id,
+        "workspace_id": proposal.workspace_id,
+        "briefing_item_id": proposal.briefing_item_id,
+        "target_provider": proposal.target_provider,
+        "action_type": proposal.action_type,
+        "title": proposal.title,
+        "description": proposal.description,
+        "payload": proposal.payload,
+        "status": proposal.status,
+        "evidence_refs": proposal.evidence_refs,
+        "created_by": proposal.created_by,
+        "created_by_user_id": proposal.created_by_user_id,
+        "approved_by_user_id": proposal.approved_by_user_id,
+        "approved_at": proposal.approved_at,
+        "rejected_by_user_id": proposal.rejected_by_user_id,
+        "rejected_at": proposal.rejected_at,
+        "rejection_reason": proposal.rejection_reason,
+        "created_at": proposal.created_at,
+        "updated_at": proposal.updated_at,
+    }
+    serialized = json.dumps(
+        material,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+        default=_proposal_version_json_default,
+    )
+    return f"ap1_{sha256(serialized.encode('utf-8')).hexdigest()}"
+
+
+def action_evidence_ref_matches_schema(ref: Mapping[str, Any]) -> bool:
+    """Validate the durable evidence_ref.v1 JSON shape without database reads."""
+
+    if any(not isinstance(key, str) for key in ref):
+        return False
+    if not set(ref).issubset(ACTION_EVIDENCE_ALLOWED_KEYS):
+        return False
+    kind = _strict_text(ref.get("kind"))
+    source = _strict_text(ref.get("source"))
+    if (
+        kind is None
+        or len(kind) > ACTION_EVIDENCE_KIND_MAX_LENGTH
+        or source is None
+        or len(source) > ACTION_EVIDENCE_SOURCE_MAX_LENGTH
+    ):
+        return False
+    selector_keys = (
+        "evidence_ref_id",
+        "source_record_id",
+        "record_id",
+        "ref",
+        "id",
+    )
+    selectors = {
+        key: _strict_text(ref.get(key))
+        for key in selector_keys
+        if ref.get(key) is not None
+    }
+    if not selectors or any(value is None for value in selectors.values()):
+        return False
+    if any(
+        len(value) > ACTION_EVIDENCE_SELECTOR_MAX_LENGTH
+        for value in selectors.values()
+        if value is not None
+    ):
+        return False
+    for key in ("evidence_ref_id", "source_record_id", "record_id"):
+        value = selectors.get(key)
+        if value is not None:
+            try:
+                UUID(value)
+            except ValueError:
+                return False
+    url = ref.get("url")
+    return url is None or _action_evidence_url_is_safe(url)
+
+
+def _strict_text(value: Any) -> str | None:
+    if not isinstance(value, str) or not value or value != value.strip():
+        return None
+    if any(character.isspace() and character != " " for character in value):
+        return None
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        return None
+    return value
+
+
+def _action_evidence_url_is_safe(value: Any) -> bool:
+    text = _strict_text(value)
+    if text is None or len(text) > 1000 or "\\" in text or any(
+        character.isspace() for character in text
+    ):
+        return False
+    try:
+        parsed = urlsplit(text)
+        parsed.port
+    except ValueError:
+        return False
+    return parsed.scheme.casefold() in {"http", "https"} and bool(parsed.netloc)
+
+
+def _proposal_version_json_default(value: object) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    raise TypeError(f"unsupported proposal version value: {type(value).__name__}")
 
 
 async def _get_action_proposal_or_raise(
@@ -303,3 +483,22 @@ def _first_secret_like_key(payload: Mapping[str, Any]) -> str | None:
                     if nested is not None:
                         return nested
     return None
+
+
+def _validate_json_byte_size(
+    value: object,
+    *,
+    field_name: str,
+    max_bytes: int,
+) -> None:
+    try:
+        # Match SQLAlchemy's default JSON serializer so PostgreSQL
+        # octet_length(...::text) enforces the same boundary for HQ reads.
+        serialized = json.dumps(
+            value,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ActionProposalError(f"{field_name} must be JSON serializable") from exc
+    if len(serialized) > max_bytes:
+        raise ActionProposalError(f"{field_name} exceeds {max_bytes} UTF-8 serialized bytes")
