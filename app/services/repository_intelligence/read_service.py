@@ -36,6 +36,9 @@ from app.db.repository_intelligence_models import (
 from app.services.headquarters_read_service import (
     sanitize_headquarters_evidence_url,
 )
+from app.services.repository_intelligence.cross_source import (
+    build_repository_cross_source_comparisons,
+)
 
 
 REPOSITORY_INTELLIGENCE_READ_MODE = "repository_intelligence_read_only"
@@ -464,6 +467,11 @@ async def build_repository_intelligence_detail(
         ),
         None,
     )
+    cross_source = await build_repository_cross_source_comparisons(
+        session=session,
+        workspace_id=workspace_id,
+        repository=repository,
+    )
 
     return {
         "workspace_id": workspace_id,
@@ -476,6 +484,7 @@ async def build_repository_intelligence_detail(
         "relationships": relationship_rows,
         "findings": finding_rows,
         "contradictions": contradiction_rows,
+        "cross_source": cross_source,
         "unknowns": unknowns,
         "confirmation_queue": confirmation_queue[:100],
         "limitations": (

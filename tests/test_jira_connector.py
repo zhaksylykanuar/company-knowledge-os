@@ -20,6 +20,9 @@ from app.db.integration_models import (
     IntegrationConnection,
 )
 from app.main import app
+from app.services.repository_intelligence.cross_source import (
+    CROSS_SOURCE_METADATA_KEY,
+)
 
 
 def _headers() -> dict[str, str]:
@@ -147,6 +150,33 @@ async def test_import_jira_issues_persists_canonical_tasks_without_provider_writ
                             "updated": "2026-07-06T10:00:00Z",
                             "fields": {"duedate": "2026-07-12"},
                             "api_token": "SHOULD_NOT_LEAK_RAW_TOKEN",
+                            "metadata": {
+                                CROSS_SOURCE_METADATA_KEY: {
+                                    "schema_version": (
+                                        "repository_cross_source_claim_set.v1"
+                                    ),
+                                    "claims": [
+                                        {
+                                            "schema_version": (
+                                                "repository_cross_source_claim.v1"
+                                            ),
+                                            "repository_id": str(uuid4()),
+                                            "repository_full_name": (
+                                                "synthetic-company/service"
+                                            ),
+                                            "fact_type": "purpose",
+                                            "claim_id": "purpose.primary",
+                                            "field": "repository_type",
+                                            "expected_value": "backend_service",
+                                            "summary": (
+                                                "Synthetic Jira source claim."
+                                            ),
+                                            "confidence": 0.8,
+                                        }
+                                    ],
+                                },
+                                "api_token": "SHOULD_NOT_LEAK_METADATA_TOKEN",
+                            },
                         },
                         {
                             "key": "FOS-124",
@@ -202,6 +232,11 @@ async def test_import_jira_issues_persists_canonical_tasks_without_provider_writ
             )
 
         assert {task.external_id for task in tasks} == {"FOS-123", "FOS-124"}
+        fos_123 = next(task for task in tasks if task.external_id == "FOS-123")
+        fos_124 = next(task for task in tasks if task.external_id == "FOS-124")
+        assert CROSS_SOURCE_METADATA_KEY in fos_123.task_metadata
+        assert CROSS_SOURCE_METADATA_KEY not in fos_124.task_metadata
+        assert "SHOULD_NOT_LEAK" not in str(fos_123.task_metadata)
         assert {record.external_id for record in source_records} == {"FOS-123", "FOS-124"}
         assert all(record.connection_id == connection_id for record in source_records)
         assert "SHOULD_NOT_LEAK" not in str([record.payload for record in source_records])

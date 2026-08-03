@@ -12,7 +12,14 @@ from sqlalchemy import delete, func, select
 
 from app.api.auth import settings
 from app.db.base import AsyncSessionLocal
-from app.db.canonical_models import EvidenceRef, Repository, SourceRecord
+from app.db.canonical_models import (
+    EvidenceRef,
+    PullRequest,
+    Repository,
+    SourceRecord,
+    Task,
+)
+from app.db.document_models import Document, DocumentVersion
 from app.db.identity_models import Membership, User, Workspace
 from app.db.repository_intelligence_models import (
     RepositoryAnalysisJob,
@@ -138,6 +145,10 @@ async def _cleanup(marker: str) -> None:
                 RepositoryAuditFinding,
                 RepositoryAuditRun,
                 RepositoryAnalysisJob,
+                DocumentVersion,
+                Document,
+                PullRequest,
+                Task,
                 EvidenceRef,
                 SourceRecord,
                 Repository,
@@ -336,8 +347,214 @@ async def _ri_counts(workspace_id: UUID) -> dict[str, int]:
                 RepositoryAuditFinding,
                 RepositoryContradiction,
                 RepositoryEvidenceLink,
+                PullRequest,
+                Task,
+                Document,
+                SourceRecord,
             )
         }
+
+
+def _claim_set(
+    *,
+    repository: Repository,
+    expected_value: str,
+    summary: str,
+    fact_type: str = "purpose",
+    claim_id: str = "purpose.primary",
+    field: str = "repository_type",
+) -> dict:
+    return {
+        "schema_version": "repository_cross_source_claim_set.v1",
+        "claims": [
+            {
+                "schema_version": "repository_cross_source_claim.v1",
+                "repository_id": str(repository.id),
+                "repository_full_name": repository.full_name,
+                "fact_type": fact_type,
+                "claim_id": claim_id,
+                "field": field,
+                "expected_value": expected_value,
+                "summary": summary,
+                "confidence": 0.8,
+            }
+        ],
+    }
+
+
+async def _seed_cross_source_records(
+    *,
+    workspace: Workspace,
+    source: Repository,
+    foreign_repository: Repository,
+) -> None:
+    async with AsyncSessionLocal() as session:
+        source_records = [
+            SourceRecord(
+                workspace_id=workspace.id,
+                provider=provider,
+                external_id=external_id,
+                record_type=record_type,
+                source_url=source_url,
+                payload={"synthetic": True},
+                payload_hash=f"hash-{external_id}",
+                observed_at=TEST_EPOCH,
+                source_updated_at=TEST_EPOCH,
+            )
+            for provider, external_id, record_type, source_url in (
+                (
+                    "github",
+                    "github-agreement",
+                    "issue",
+                    "https://github.com/synthetic-company/source/issues/1",
+                ),
+                (
+                    "jira",
+                    "FOS-42",
+                    "issue",
+                    "https://jira.example/browse/FOS-42",
+                ),
+                (
+                    "jira",
+                    "FOS-43",
+                    "issue",
+                    "https://jira.example/browse/FOS-43",
+                ),
+                (
+                    "github",
+                    "github-pr-agreement",
+                    "pull_request",
+                    "https://github.com/synthetic-company/source/pull/7",
+                ),
+            )
+        ]
+        session.add_all(source_records)
+        await session.flush()
+        session.add_all(
+            [
+                Task(
+                    workspace_id=workspace.id,
+                    source_provider="github",
+                    source_record_id=source_records[0].id,
+                    external_id="github-agreement",
+                    title="Structured GitHub agreement",
+                    status="open",
+                    source_url=source_records[0].source_url,
+                    source_updated_at=TEST_EPOCH,
+                    task_metadata={
+                        "github_object_type": "issue",
+                        "repository_intelligence_claims": _claim_set(
+                            repository=source,
+                            expected_value="backend_service",
+                            summary="GitHub agrees this is a backend service.",
+                        ),
+                    },
+                ),
+                Task(
+                    workspace_id=workspace.id,
+                    source_provider="jira",
+                    source_record_id=source_records[1].id,
+                    external_id="FOS-42",
+                    title="Structured Jira contradiction",
+                    status="open",
+                    source_url=source_records[1].source_url,
+                    source_updated_at=TEST_EPOCH,
+                    task_metadata={
+                        "jira_object_type": "issue",
+                        "repository_intelligence_claims": _claim_set(
+                            repository=source,
+                            expected_value="frontend_application",
+                            summary="Jira says this is a frontend application.",
+                        ),
+                    },
+                ),
+                Task(
+                    workspace_id=workspace.id,
+                    source_provider="jira",
+                    source_record_id=source_records[2].id,
+                    external_id="FOS-43",
+                    title="Foreign repository claim",
+                    status="open",
+                    source_url=source_records[2].source_url,
+                    source_updated_at=TEST_EPOCH,
+                    task_metadata={
+                        "jira_object_type": "issue",
+                        "repository_intelligence_claims": _claim_set(
+                            repository=foreign_repository,
+                            expected_value="backend_service",
+                            summary="This exact claim belongs to another repository.",
+                        ),
+                    },
+                ),
+            ]
+        )
+        session.add(
+            PullRequest(
+                workspace_id=workspace.id,
+                repository_id=source.id,
+                source_record_id=source_records[3].id,
+                external_id="github-pr-agreement",
+                number=7,
+                title="Structured PR responsibility agreement",
+                state="open",
+                source_url=source_records[3].source_url,
+                created_at_source=TEST_EPOCH,
+                updated_at_source=TEST_EPOCH,
+                pr_metadata={
+                    "github_object_type": "pull_request",
+                    "repository_intelligence_claims": _claim_set(
+                        repository=source,
+                        expected_value="owns",
+                        summary="The PR agrees this repository owns the order API.",
+                        fact_type="responsibility",
+                        claim_id="responsibility.orders",
+                        field="claim_type",
+                    ),
+                },
+            )
+        )
+        missing_fact_document = Document(
+            workspace_id=workspace.id,
+            title="Structured dependency note",
+            body_markdown=json.dumps(
+                _claim_set(
+                    repository=source,
+                    expected_value="redis",
+                    summary="The document declares a Redis dependency.",
+                    fact_type="dependency_consumed",
+                    claim_id="dependency.cache",
+                    field="claim_type",
+                ),
+                separators=(",", ":"),
+            ),
+            body_text="synthetic structured claim",
+            tags=["repository-intelligence"],
+            status="published",
+        )
+        malformed_document = Document(
+            workspace_id=workspace.id,
+            title="Malformed structured note",
+            body_markdown="{not-json",
+            body_text="private raw document body should not be returned",
+            tags=["repository-intelligence"],
+            status="published",
+        )
+        untagged_document = Document(
+            workspace_id=workspace.id,
+            title="Free text must not create a contradiction",
+            body_markdown=(
+                "This repository is definitely a frontend application."
+            ),
+            body_text=(
+                "This repository is definitely a frontend application."
+            ),
+            tags=[],
+            status="published",
+        )
+        session.add_all(
+            [missing_fact_document, malformed_document, untagged_document]
+        )
+        await session.commit()
 
 
 async def test_repository_intelligence_read_apis_project_bounded_safe_state(
@@ -355,6 +572,11 @@ async def test_repository_intelligence_read_apis_project_bounded_safe_state(
             commit_sha="1" * 40,
         )
         run_id = await _persist_run(owner=owner, payload=payload, marker=marker)
+        await _seed_cross_source_records(
+            workspace=workspace,
+            source=source,
+            foreign_repository=target,
+        )
         before = await _ri_counts(workspace.id)
         params = {"owner_email": owner.email}
         base = f"/api/v1/workspaces/{workspace.id}/repository-intelligence"
@@ -429,6 +651,54 @@ async def test_repository_intelligence_read_apis_project_bounded_safe_state(
         assert detail["relationships"][0]["direction"] == "outbound"
         assert detail["relationships"][0]["to_repository"]["id"] == str(target.id)
         assert detail["findings"][0]["severity"] == "medium"
+        assert detail["cross_source"]["summary"] == {
+            "sources_considered": 6,
+            "comparisons": 4,
+            "agreements": 2,
+            "contradictions": 1,
+            "insufficient_evidence": 1,
+            "rejected_claim_sets": 2,
+        }
+        comparisons = detail["cross_source"]["comparisons"]
+        agreements = [
+            row for row in comparisons if row["status"] == "agreement"
+        ]
+        contradiction = next(
+            row for row in comparisons if row["status"] == "contradiction"
+        )
+        insufficient = next(
+            row
+            for row in comparisons
+            if row["status"] == "insufficient_evidence"
+        )
+        assert {row["source"]["source_type"] for row in agreements} == {
+            "task",
+            "pull_request",
+        }
+        assert {row["source"]["provider"] for row in agreements} == {"github"}
+        assert contradiction["source"]["provider"] == "jira"
+        assert (
+            contradiction["repository_fact"]["actual_value"]
+            == "backend_service"
+        )
+        assert (
+            insufficient["source"]["source_type"] == "document"
+        )
+        assert {
+            row["error_code"]
+            for row in detail["cross_source"]["rejected_claim_sets"]
+        } == {
+            "claim_set_invalid_json",
+            "repository_identity_mismatch",
+        }
+        assert detail["cross_source"]["contract"] == {
+            "claim_set_schema": "repository_cross_source_claim_set.v1",
+            "claim_schema": "repository_cross_source_claim.v1",
+            "exact_repository_identity_required": True,
+            "free_text_inference": False,
+            "fuzzy_matching": False,
+            "persistence_write": False,
+        }
         assert detail["capabilities"] == {
             "provider_calls": False,
             "repository_reads": False,
@@ -480,6 +750,8 @@ async def test_repository_intelligence_read_apis_project_bounded_safe_state(
         assert "private-report.json" not in response_text
         assert "artifact_manifest" not in response_text
         assert "source_record" not in response_text
+        assert "private raw document body" not in response_text
+        assert "definitely a frontend application" not in response_text
         assert await _ri_counts(workspace.id) == before
     finally:
         await _cleanup(marker)

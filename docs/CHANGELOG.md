@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added RI-008 strict structured cross-source Repository Intelligence claims.
+  Sanitized GitHub issue/PR metadata, Jira task metadata, and opt-in internal
+  documents can carry bounded versioned assertions about one exact repository
+  fact.
+- Repository detail now explains agreement, contradiction, and insufficient
+  evidence states with both the source evidence and current RI evidence. It
+  also reports malformed, oversized, duplicate, mixed-identity, and
+  unsupported claim sets without repairing them.
 - Added RI-007 Repository Intelligence read models and Company UI over
   workspace-scoped RI-006 persistence. The bounded read-only API exposes the
   repository portfolio, detail, immutable audit history, current directional
@@ -19,6 +27,10 @@
 
 ### Security
 
+- Cross-source comparisons require exact workspace repository UUID,
+  case-insensitive canonical full name, fact type, claim ID and controlled
+  field. Free-text inference, fuzzy/name matching, autonomous persistence,
+  task creation, provider/LLM calls and external writes are disabled.
 - Replaced the local GitHub repository inventory's substring URL check with
   parsed exact-origin validation. Display/evidence links now require HTTPS,
   exact `github.com`, no credentials, no non-default port, and no

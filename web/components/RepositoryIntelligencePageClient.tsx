@@ -683,6 +683,10 @@ function RepositoryDetail({
         contradictions={detail.contradictions}
         onEvidence={onEvidence}
       />
+      <CrossSourceSection
+        crossSource={detail.cross_source}
+        onEvidence={onEvidence}
+      />
       <HistorySection history={history} />
       {detail.limitations.length > 0 ? (
         <details className={styles.disclosure}>
@@ -908,6 +912,120 @@ function ContradictionSection({
         ))}
       </div>
     </details>
+  );
+}
+
+function CrossSourceSection({
+  crossSource,
+  onEvidence
+}: {
+  crossSource: RepositoryDetailResponse["cross_source"];
+  onEvidence: (evidence: RepositoryEvidence, title: string) => void;
+}) {
+  const hasAttention =
+    crossSource.summary.contradictions > 0 ||
+    crossSource.summary.insufficient_evidence > 0 ||
+    crossSource.summary.rejected_claim_sets > 0;
+  return (
+    <details className={styles.disclosure} open={hasAttention}>
+      <summary>
+        Между источниками · {crossSource.summary.comparisons}
+      </summary>
+      <p className="muted">
+        Только exact structured claims: GitHub/Jira/Document → текущий RI факт.
+        Free-text inference и fuzzy matching выключены.
+      </p>
+      <div className={styles.itemList}>
+        {crossSource.comparisons.map((comparison) => {
+          const evidence = [
+            ...comparison.source_evidence,
+            ...comparison.repository_evidence
+          ];
+          return (
+            <section className={styles.item} key={comparison.id}>
+              <div className={styles.itemHeading}>
+                <strong>{comparison.summary}</strong>
+                <CrossSourceStatus status={comparison.status} />
+              </div>
+              <p className="muted">{comparison.source_claim.summary}</p>
+              <dl className="work-meta">
+                <div>
+                  <dt>Источник</dt>
+                  <dd>
+                    {comparison.source.provider} ·{" "}
+                    {comparison.source.source_type} · {comparison.source.ref}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Source claim</dt>
+                  <dd>
+                    {comparison.source_claim.claim_id}.
+                    {comparison.source_claim.field} ={" "}
+                    {comparison.source_claim.expected_value}
+                  </dd>
+                </div>
+                <div>
+                  <dt>RI fact</dt>
+                  <dd>
+                    {comparison.repository_fact?.actual_value ??
+                      "insufficient evidence"}
+                  </dd>
+                </div>
+              </dl>
+              {comparison.source.url ? (
+                <SourceLink url={comparison.source.url}>
+                  Открыть связанный источник
+                </SourceLink>
+              ) : null}
+              <EvidenceButtons
+                evidence={evidence}
+                onEvidence={onEvidence}
+                title={comparison.summary}
+              />
+            </section>
+          );
+        })}
+        {crossSource.comparisons.length === 0 ? (
+          <p className="muted">
+            Нет валидных structured claims для exact-сравнения.
+          </p>
+        ) : null}
+      </div>
+      {crossSource.rejected_claim_sets.length > 0 ? (
+        <details className={styles.nestedDisclosure}>
+          <summary>
+            Отклонённые claim sets ·{" "}
+            {crossSource.summary.rejected_claim_sets}
+          </summary>
+          <ul className="meta-list">
+            {crossSource.rejected_claim_sets.map((rejected) => (
+              <li
+                key={`${rejected.source.record_id}-${rejected.error_code}`}
+              >
+                {rejected.source.provider}:{rejected.source.ref} —{" "}
+                {rejected.error_code}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </details>
+  );
+}
+
+function CrossSourceStatus({
+  status
+}: {
+  status: RepositoryDetailResponse["cross_source"]["comparisons"][number]["status"];
+}) {
+  const className =
+    status === "contradiction"
+      ? styles.crossSourceContradiction
+      : status === "agreement"
+        ? styles.observed
+        : styles.candidate;
+  return (
+    <span className={`${styles.claimBadge} ${className}`}>{status}</span>
   );
 }
 

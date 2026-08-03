@@ -243,6 +243,162 @@ const detail: RepositoryDetailResponse = {
     }
   ],
   contradictions: [],
+  cross_source: {
+    summary: {
+      sources_considered: 3,
+      comparisons: 3,
+      agreements: 1,
+      contradictions: 1,
+      insufficient_evidence: 1,
+      rejected_claim_sets: 1
+    },
+    comparisons: [
+      {
+        id: "c".repeat(64),
+        status: "agreement",
+        summary:
+          "Source claim agrees with RI: purpose.primary.repository_type=backend_service.",
+        source: {
+          source_type: "task",
+          provider: "github",
+          record_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          ref: "issue-1",
+          url: "https://github.com/synthetic-company/orders-service/issues/1",
+          observed_at: "2026-08-03T10:00:00Z"
+        },
+        source_claim: {
+          fact_type: "purpose",
+          claim_id: "purpose.primary",
+          field: "repository_type",
+          expected_value: "backend_service",
+          summary: "The GitHub issue describes a backend service.",
+          confidence: 0.9
+        },
+        repository_fact: {
+          id: "77777777-7777-4777-8777-777777777777",
+          fact_type: "purpose",
+          claim_id: "purpose.primary",
+          field: "repository_type",
+          actual_value: "backend_service",
+          claim_status: "observed",
+          confidence: 0.96,
+          human_resolution_status: "pending"
+        },
+        source_evidence: [
+          {
+            ...evidence,
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            kind: "github_issue",
+            record_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+          }
+        ],
+        repository_evidence: [evidence]
+      },
+      {
+        id: "d".repeat(64),
+        status: "contradiction",
+        summary:
+          "Source claim asserts purpose.primary.repository_type=frontend_application, while RI records backend_service.",
+        source: {
+          source_type: "task",
+          provider: "jira",
+          record_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          ref: "FOS-42",
+          url: "https://jira.example/browse/FOS-42",
+          observed_at: "2026-08-03T10:00:00Z"
+        },
+        source_claim: {
+          fact_type: "purpose",
+          claim_id: "purpose.primary",
+          field: "repository_type",
+          expected_value: "frontend_application",
+          summary: "Jira describes this as a frontend application.",
+          confidence: 0.8
+        },
+        repository_fact: {
+          id: "77777777-7777-4777-8777-777777777777",
+          fact_type: "purpose",
+          claim_id: "purpose.primary",
+          field: "repository_type",
+          actual_value: "backend_service",
+          claim_status: "observed",
+          confidence: 0.96,
+          human_resolution_status: "pending"
+        },
+        source_evidence: [
+          {
+            ...evidence,
+            id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            kind: "jira_issue",
+            source: "jira",
+            record_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            url: "https://jira.example/browse/FOS-42"
+          }
+        ],
+        repository_evidence: [evidence]
+      },
+      {
+        id: "e".repeat(64),
+        status: "insufficient_evidence",
+        summary:
+          "No current RI fact exactly matches dependency_consumed:dependency.cache.claim_type.",
+        source: {
+          source_type: "document",
+          provider: "internal",
+          record_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          ref: "Architecture note",
+          url: null,
+          observed_at: "2026-08-03T10:00:00Z"
+        },
+        source_claim: {
+          fact_type: "dependency_consumed",
+          claim_id: "dependency.cache",
+          field: "claim_type",
+          expected_value: "redis",
+          summary: "The architecture note declares a Redis dependency.",
+          confidence: 0.7
+        },
+        repository_fact: null,
+        source_evidence: [
+          {
+            ...evidence,
+            id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            kind: "document",
+            source: "internal",
+            record_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            url: null
+          }
+        ],
+        repository_evidence: []
+      }
+    ],
+    rejected_claim_sets: [
+      {
+        source: {
+          source_type: "document",
+          provider: "internal",
+          record_id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+          ref: "Malformed claim note",
+          url: null,
+          observed_at: "2026-08-03T10:00:00Z"
+        },
+        error_code: "claim_set_invalid_json"
+      }
+    ],
+    truncated: {
+      sources: false,
+      comparisons: false,
+      rejected_claim_sets: false
+    },
+    contract: {
+      claim_set_schema: "repository_cross_source_claim_set.v1",
+      claim_schema: "repository_cross_source_claim.v1",
+      exact_repository_identity_required: true,
+      free_text_inference: false,
+      fuzzy_matching: false,
+      persistence_write: false
+    }
+  },
   unknowns: [
     {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -494,6 +650,12 @@ test("renders portfolio, progressive detail, evidence states, and boundaries", (
   assert.match(html, /Направленные связи · 1/);
   assert.match(html, /Риски и operability · 1/);
   assert.match(html, /Неизвестные и очередь подтверждения · 2/);
+  assert.match(html, /Между источниками · 3/);
+  assert.match(html, /agreement/);
+  assert.match(html, /contradiction/);
+  assert.match(html, /insufficient_evidence/);
+  assert.match(html, /FOS-42/);
+  assert.match(html, /claim_set_invalid_json/);
   assert.match(html, /История аудита · 1/);
   assert.match(html, /inferred/);
   assert.match(html, /Evidence: Owns the synthetic order API/);
