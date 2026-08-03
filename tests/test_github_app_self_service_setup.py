@@ -347,6 +347,120 @@ def test_github_app_permissions_require_both_read_capabilities() -> None:
             github_app_setup_provider.ensure_read_only_permissions(permissions)
 
 
+def test_github_app_urls_require_exact_canonical_paths() -> None:
+    valid_app_url = "https://github.com/apps/founderos-test"
+    assert github_app_setup_provider._safe_github_url(valid_app_url) == valid_app_url
+    assert github_app_credential_service._safe_github_url(valid_app_url) == valid_app_url
+    assert (
+        github_app_setup_provider._safe_github_url(
+            valid_app_url,
+            expected_slug="FounderOS-Test",
+        )
+        == valid_app_url
+    )
+    assert (
+        github_app_credential_service._safe_github_url(
+            valid_app_url,
+            expected_slug="FounderOS-Test",
+        )
+        == valid_app_url
+    )
+
+    invalid_app_urls = (
+        None,
+        "",
+        " https://github.com/apps/founderos-test",
+        "https://github.com/apps/founderos-test ",
+        "http://github.com/apps/founderos-test",
+        "https://GITHUB.com/apps/founderos-test",
+        "https://github.com:443/apps/founderos-test",
+        "https://github.com:444/apps/founderos-test",
+        "https://github.com.evil.example/apps/founderos-test",
+        "https://evil.example/github.com/apps/founderos-test",
+        "https://github.com@evil.example/apps/founderos-test",
+        "https://user:password@github.com/apps/founderos-test",
+        "https://github.com/apps/founderos-test/installations/new",
+        "https://github.com/apps/founderos-test/",
+        "https://github.com/apps/founderos-test?",
+        "https://github.com/apps/founderos-test?token=hidden",
+        "https://github.com/apps/founderos-test#",
+        "https://github.com/apps/founderos-test#fragment",
+        "https://github.com/apps/founderos-test\\@evil.example",
+        "https://github.com/apps/founderos test",
+        "https://github.com/apps/founderos-test\x00hidden",
+        "https://github.com/apps/founderos-test\n.evil.example",
+        "https://github.com/apps/founderos%2Ftest",
+        "https://github.com/apps/",
+        f"https://github.com/apps/{'a' * 121}",
+        f"https://github.com/apps/{'a' * 1000}",
+    )
+    for invalid in invalid_app_urls:
+        assert github_app_setup_provider._safe_github_url(invalid) is None
+        assert github_app_credential_service._safe_github_url(invalid) is None
+    assert (
+        github_app_setup_provider._safe_github_url(
+            valid_app_url,
+            expected_slug="different-app",
+        )
+        is None
+    )
+    assert (
+        github_app_credential_service._safe_github_url(
+            valid_app_url,
+            expected_slug="different-app",
+        )
+        is None
+    )
+
+    valid_repository_url = "https://github.com/founderos-test/alpha"
+    assert (
+        github_app_setup_service._safe_github_repository_url(
+            valid_repository_url,
+            expected_full_name="FounderOS-Test/Alpha",
+        )
+        == valid_repository_url
+    )
+
+    invalid_repository_urls = (
+        None,
+        "",
+        " https://github.com/founderos-test/alpha",
+        "https://github.com/founderos-test/alpha ",
+        "http://github.com/founderos-test/alpha",
+        "https://GITHUB.com/founderos-test/alpha",
+        "https://github.com:443/founderos-test/alpha",
+        "https://github.com:444/founderos-test/alpha",
+        "https://github.com.evil.example/founderos-test/alpha",
+        "https://evil.example/github.com/founderos-test/alpha",
+        "https://github.com@evil.example/founderos-test/alpha",
+        "https://user:password@github.com/founderos-test/alpha",
+        "https://github.com/founderos-test/alpha/issues/1",
+        "https://github.com/founderos-test/alpha/",
+        "https://github.com/founderos-test/alpha?",
+        "https://github.com/founderos-test/alpha?token=hidden",
+        "https://github.com/founderos-test/alpha#",
+        "https://github.com/founderos-test/alpha#fragment",
+        "https://github.com/founderos-test\\alpha",
+        "https://github.com/founderos test/alpha",
+        "https://github.com/founderos-test/alpha\x00hidden",
+        "https://github.com/founderos-test/alpha\n.evil.example",
+        "https://github.com/founderos-test%2Falpha",
+        "https://github.com/founderos-test",
+        "https://github.com/founderos-test/alpha/extra",
+        f"https://github.com/founderos-test/{'a' * 1000}",
+    )
+    for invalid in invalid_repository_urls:
+        assert github_app_setup_service._safe_github_repository_url(invalid) is None
+
+    assert (
+        github_app_setup_service._safe_github_repository_url(
+            valid_repository_url,
+            expected_full_name="founderos-test/beta",
+        )
+        is None
+    )
+
+
 async def test_provider_requests_use_fixed_github_origin_and_validated_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1237,6 +1351,28 @@ async def test_verified_oauth_stays_tokenless_until_nonempty_repository_selectio
                 "html_url": "https://github.com/founderos-test/beta",
                 "updated_at": "2026-07-14T09:00:00Z",
             },
+            {
+                "id": 303,
+                "full_name": "founderos-test/hostile",
+                "private": True,
+                "visibility": "private",
+                "archived": False,
+                "default_branch": "main",
+                "html_url": (
+                    "https://github.com/founderos-test/hostile?token=hidden"
+                ),
+                "updated_at": "2026-07-14T09:30:00Z",
+            },
+            {
+                "id": 404,
+                "full_name": "founderos-test/mismatch",
+                "private": True,
+                "visibility": "private",
+                "archived": False,
+                "default_branch": "main",
+                "html_url": "https://github.com/founderos-test/different",
+                "updated_at": "2026-07-14T09:45:00Z",
+            },
         ]
         repository_calls = {"mint": 0, "list": 0}
 
@@ -1280,8 +1416,18 @@ async def test_verified_oauth_stays_tokenless_until_nonempty_repository_selectio
             assert [item["full_name"] for item in inventory] == [
                 "founderos-test/alpha",
                 "founderos-test/beta",
+                "founderos-test/hostile",
+                "founderos-test/mismatch",
             ]
             assert all("raw_secret" not in item for item in inventory)
+            assert {
+                item["full_name"]: item["source_url"] for item in inventory
+            } == {
+                "founderos-test/alpha": "https://github.com/founderos-test/alpha",
+                "founderos-test/beta": "https://github.com/founderos-test/beta",
+                "founderos-test/hostile": None,
+                "founderos-test/mismatch": None,
+            }
             setup_row = await session.scalar(
                 select(GitHubAppSetupSession).where(
                     GitHubAppSetupSession.workspace_id == fixture.workspace_id
@@ -1466,7 +1612,7 @@ async def test_verified_oauth_stays_tokenless_until_nonempty_repository_selectio
                 "full_name"
             ] == "founderos-test/alpha"
             await session.commit()
-        assert len(reconfigured_inventory) == 2
+        assert len(reconfigured_inventory) == 4
         assert repository_calls == {"mint": 2, "list": 2}
 
         async with AsyncSessionLocal() as session:

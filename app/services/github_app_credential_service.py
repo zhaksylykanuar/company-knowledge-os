@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,6 +15,11 @@ from app.db.integration_models import (
     GitHubAppCredential,
 )
 from app.services.secret_encryption import decrypt_secret, encrypt_secret
+
+
+_GITHUB_APP_SLUG_RE = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,118}[A-Za-z0-9])?$"
+)
 
 
 class GitHubAppCredentialError(RuntimeError):
@@ -144,7 +151,7 @@ async def store_manifest_github_app_credential(
     owner_id = _optional_text(payload.owner_id, max_length=100)
     owner_type = _optional_text(payload.owner_type, max_length=40)
     permissions = _safe_permissions(payload.permissions or {})
-    html_url = _safe_github_url(payload.html_url)
+    html_url = _safe_github_url(payload.html_url, expected_slug=app_slug)
     callback_url = _required_url(payload.callback_url)
 
     credential = await session.scalar(
@@ -227,11 +234,50 @@ def _required_url(value: str) -> str:
     return normalized
 
 
-def _safe_github_url(value: Any) -> str | None:
-    normalized = _optional_text(value, max_length=1000)
-    if normalized and normalized.startswith("https://github.com/") and "@" not in normalized:
-        return normalized
-    return None
+def _safe_github_url(
+    value: Any,
+    *,
+    expected_slug: str | None = None,
+) -> str | None:
+    """Retain only GitHub's canonical App page for the validated App slug."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 1000
+        or "?" in value
+        or "#" in value
+        or "\\" in value
+        or any(character.isspace() for character in value)
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        return None
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except (UnicodeError, ValueError):
+        return None
+    parts = parsed.path.split("/")
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "github.com"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or len(parts) != 3
+        or parts[:2] != ["", "apps"]
+        or _GITHUB_APP_SLUG_RE.fullmatch(parts[2]) is None
+        or (
+            expected_slug is not None
+            and (
+                _GITHUB_APP_SLUG_RE.fullmatch(expected_slug) is None
+                or parts[2].casefold() != expected_slug.casefold()
+            )
+        )
+    ):
+        return None
+    return value
 
 
 def _safe_permissions(value: dict[str, Any]) -> dict[str, str]:

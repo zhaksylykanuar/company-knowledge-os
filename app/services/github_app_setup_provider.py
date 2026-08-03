@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import re
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 from cryptography.hazmat.primitives import serialization
@@ -100,8 +100,9 @@ async def exchange_manifest_code(code: str) -> GitHubManifestConversion:
     )
     private_key = _required_text(data.get("pem"), 16384, "manifest_response_invalid")
     _validate_private_key(private_key)
-    html_url = _safe_github_url(data.get("html_url"))
-    app_slug = _app_slug(data.get("slug"), html_url=html_url)
+    candidate_html_url = _safe_github_url(data.get("html_url"))
+    app_slug = _app_slug(data.get("slug"), html_url=candidate_html_url)
+    html_url = _safe_github_url(candidate_html_url, expected_slug=app_slug)
     owner = _mapping(data.get("owner"))
     permissions = _permissions(data.get("permissions"))
     ensure_read_only_permissions(permissions)
@@ -401,11 +402,50 @@ def _app_slug(value: Any, *, html_url: str | None) -> str:
     return slug
 
 
-def _safe_github_url(value: Any) -> str | None:
-    text = _optional_text(value, 1000)
-    if text and text.startswith("https://github.com/apps/") and "@" not in text:
-        return text
-    return None
+def _safe_github_url(
+    value: Any,
+    *,
+    expected_slug: str | None = None,
+) -> str | None:
+    """Retain only GitHub's canonical App page for the validated App slug."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 1000
+        or "?" in value
+        or "#" in value
+        or "\\" in value
+        or any(character.isspace() for character in value)
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        return None
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except (UnicodeError, ValueError):
+        return None
+    parts = parsed.path.split("/")
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "github.com"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or len(parts) != 3
+        or parts[:2] != ["", "apps"]
+        or _SLUG_RE.fullmatch(parts[2]) is None
+        or (
+            expected_slug is not None
+            and (
+                _SLUG_RE.fullmatch(expected_slug) is None
+                or parts[2].casefold() != expected_slug.casefold()
+            )
+        )
+    ):
+        return None
+    return value
 
 
 def _permissions(value: Any) -> dict[str, str]:

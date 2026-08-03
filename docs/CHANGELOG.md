@@ -9,6 +9,12 @@
   exact `github.com`, no credentials, no non-default port, and no
   query/fragment; hostile lookalike hosts and embedded `github.com` strings are
   discarded.
+- Tightened managed GitHub App metadata links. Manifest App URLs now require
+  the exact canonical `/apps/<validated-slug>` shape, and repository setup URLs
+  require an exact `/owner/repository` path that matches the canonical
+  repository identity. Credentials, ports, extra paths, whitespace/control
+  characters, backslashes, query values, fragments, and malformed or lookalike
+  hosts are discarded.
 
 ## 2026-08-02
 

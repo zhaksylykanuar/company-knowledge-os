@@ -3932,6 +3932,29 @@ test-analysis artifacts: deliberate sentinel statements inside
 one-time-state rejection. They remain as useful regression assertions and do
 not represent production control-flow or security defects.
 
+## DEC-123 - Managed GitHub App Metadata Uses Exact Canonical Web Paths
+
+Decision (2026-08-03): URLs returned by GitHub during managed App setup remain
+untrusted optional metadata even though provider requests use the fixed GitHub
+API origin. A manifest App URL is retained only when it is exactly
+`https://github.com/apps/<validated-slug>`. A repository setup URL is retained
+only when it is exactly `https://github.com/<owner>/<repository>` and its path
+matches the already validated canonical repository `full_name`
+case-insensitively.
+
+Both boundaries reject credentials, explicit ports, alternate schemes or
+hosts, extra path segments, query strings, fragments, backslashes,
+whitespace/control characters, overlong input and malformed URL parsing.
+Unsafe values become `None`; they do not fail an otherwise identity-valid
+provider response, get repaired, or become a request target. App slug,
+repository identity, installation verification and canonical PostgreSQL rows
+remain authoritative.
+
+This is a narrow defense-in-depth change to managed GitHub App setup. It adds
+no provider call, production mutation outside the existing setup transaction,
+migration, UI, company repository read, target execution, LLM path or RI-007
+behavior.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

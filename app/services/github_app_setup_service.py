@@ -1125,7 +1125,10 @@ async def _upsert_setup_repository(
     row.default_branch = _safe_text(repository.get("default_branch"), 255)
     row.visibility = str(repository["visibility"])
     row.archived = bool(repository["archived"])
-    row.source_url = _safe_github_repository_url(repository.get("source_url"))
+    row.source_url = _safe_github_repository_url(
+        repository.get("source_url"),
+        expected_full_name=full_name,
+    )
     row.repo_metadata = {
         "source": "github_app_setup",
         "installation_id": installation_id,
@@ -1157,7 +1160,8 @@ def _normalize_provider_repositories(value: list[dict[str, Any]]) -> list[dict[s
                 "archived": bool(raw.get("archived")),
                 "default_branch": _safe_text(raw.get("default_branch"), 255),
                 "source_url": _safe_github_repository_url(
-                    raw.get("source_url") or raw.get("html_url")
+                    raw.get("source_url") or raw.get("html_url"),
+                    expected_full_name=full_name,
                 ),
                 "last_activity_at": _safe_datetime_text(
                     raw.get("last_activity_at") or raw.get("updated_at")
@@ -1291,14 +1295,53 @@ def _safe_repository_full_name(value: Any) -> str | None:
     return text
 
 
-def _safe_github_repository_url(value: Any) -> str | None:
-    text = _safe_text(value, 1000)
-    if text is None:
+def _safe_github_repository_url(
+    value: Any,
+    *,
+    expected_full_name: str | None = None,
+) -> str | None:
+    """Retain only a canonical repository page matching the validated identity."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 1000
+        or "?" in value
+        or "#" in value
+        or "\\" in value
+        or any(character.isspace() for character in value)
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
         return None
-    parsed = urlsplit(text)
-    if parsed.scheme != "https" or parsed.netloc != "github.com" or "@" in text:
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except (UnicodeError, ValueError):
         return None
-    return text
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "github.com"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or not parsed.path.startswith("/")
+        or parsed.path.endswith("/")
+    ):
+        return None
+    full_name = _safe_repository_full_name(parsed.path[1:])
+    expected = (
+        _safe_repository_full_name(expected_full_name)
+        if expected_full_name is not None
+        else None
+    )
+    if (
+        full_name is None
+        or (expected_full_name is not None and expected is None)
+        or (expected is not None and full_name.casefold() != expected.casefold())
+    ):
+        return None
+    return value
 
 
 def _safe_installation_settings_url(value: Any) -> str | None:
