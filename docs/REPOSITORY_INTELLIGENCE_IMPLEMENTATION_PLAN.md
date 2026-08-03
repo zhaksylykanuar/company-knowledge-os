@@ -1,7 +1,7 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001–RI-009 implemented on synthetic data; RI-009 fails closed and
-real-repository L2 remains disabled
+Status: RI-001–RI-009 and the preparation-only portfolio dry-run boundary are
+implemented; private manifest validation and the real L0/L1 run remain gated
 Prepared: 2026-07-31
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
@@ -24,7 +24,9 @@ The RI-009 hostile-synthetic macOS candidate is recorded under DEC-126 and fails
 closed before execution because this host cannot enforce the required hard RAM
 and aggregate scratch limits. No provider portfolio read, company target
 execution or LLM path exists; real-repository L2 remains disabled. Preparation
-status remains `preparing`.
+status remains `preparing`. DEC-127 adds strict exact-SHA L0/L1 private-manifest
+validation and a content-free receipt without provider/repository reads, jobs
+or persistence; no private company manifest has been supplied or validated.
 
 ## 1. Decision Summary
 
@@ -1603,10 +1605,12 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: prepare a separately approved L0/L1-only portfolio dry
-run. Do not enable real-repository L2 without a new approved backend and hostile
-proof of every hard RAM, aggregate disk, CPU, process, output and wall-time
-bound.
+Recommended next task: create the owner-private exact-SHA manifest outside the
+repository and run only the validation command from
+`docs/deploy/repository-intelligence-portfolio-dry-run.md`. Do not start the
+provider/repository read without a new explicit founder instruction, and do not
+enable real-repository L2 without a new approved backend and hostile proof of
+every hard resource bound.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1614,13 +1618,12 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Prepare the first controlled Repository Intelligence portfolio dry run.
+Goal: Validate the owner-private Repository Intelligence portfolio manifest.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
-docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. RI-001–RI-009 are prepared
-on synthetic data; DEC-126 keeps real-repository L2 disabled.
-Constraints: Separate approval; L0/L1 only; read-only approved manifest and
-exact SHA; no target execution, writes, LLM mutation or secret exposure.
-Done when: A dry-run plan names approved repositories, audit levels, exact
-evidence/output boundaries, failure isolation, retention and rollback without
-starting the run.
+docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. DEC-127 provides a
+validation-only exact-SHA L0/L1 contract; DEC-126 keeps L2 disabled.
+Constraints: Manifest outside FounderOS, owner-only permissions, no provider or
+target read, no job enqueue, persistence, execution, writes or secret exposure.
+Done when: The content-free receipt hash and aggregate counts match the intended
+private manifest; stop before starting the real run.
 ```

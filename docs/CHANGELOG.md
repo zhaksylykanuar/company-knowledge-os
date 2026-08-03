@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added a preparation-only Repository Intelligence portfolio dry run. The strict
+  exact-SHA manifest allows only L0/L1, accepts no credentials or executable
+  profile, and returns a content-free aggregate receipt without provider calls,
+  target reads, job enqueue, persistence or external writes.
+- Added an owner-private `0600` manifest CLI plus the central output,
+  evidence-validation, failure-isolation, restart, retention and rollback
+  runbook for the later separately approved portfolio read.
+
 - Added RI-009 closed hostile-synthetic L2 isolation contracts and a fixed
   containment probe. The profile accepts no repository path or arbitrary
   command/environment/network input and returns only a bounded status receipt

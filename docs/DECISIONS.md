@@ -4066,6 +4066,49 @@ RI-009 adds no migration, persistence, API, UI, provider read, LLM path,
 external action, company repository read/clone or target command execution.
 The next real portfolio run remains separately approval-gated and L0/L1-only.
 
+## DEC-127 - The First Portfolio Dry Run Validates Intent Without Reading Repositories
+
+Decision (2026-08-03): the approved first Repository Intelligence portfolio dry
+run is a preparation-only validation boundary, not authorization to read a
+provider or target repository. Strict `repository_portfolio_dry_run.v1`
+requires one workspace, unique canonical repository UUID/provider identities,
+exact `owner/repository`, a full lowercase SHA-1, exactly L0 and L1, and frozen
+profile, policy SHA-256 and engine version. L2, missing/short SHA, disabled rows,
+unknown fields, duplicate identities and authorization flags for provider read,
+target read/execution or persistence fail closed.
+
+A target may be described as `provider_exact_sha` or by an opaque relative
+`operator_managed_local_mirror` reference. The manifest never accepts an
+absolute target path, traversal, credentials, token, arbitrary command,
+repository-owned configuration or environment values. The CLI reads only one
+explicit absolute manifest outside FounderOS, requires an owner-owned regular
+file with no group/world permissions, refuses symlinks and caps the file at 64
+KiB. It does not resolve or open any named repository/mirror reference.
+
+The content-free `repository_portfolio_dry_run_receipt.v1` contains only
+aggregate repository/source counts and fixed control contracts. It deliberately
+omits workspace/repository IDs and even an unkeyed manifest digest because
+repository names and SHAs may be guessable, enabling offline candidate
+verification. The private manifest itself remains the approval object and any
+change requires a new dry run.
+It records zero provider calls, target paths opened, repository reads/clones,
+target execution, jobs, persistence and external writes. It never returns
+repository names, provider IDs, SHAs, mirror refs, source bodies or manifest
+paths.
+
+For the later separately approved real run, output is central-audit-only;
+imports must be schema/evidence valid; one repository maps to one durable job;
+failed/partial runs cannot reconcile absence; retry/resume remains bound to
+exact repository + SHA + profile + policy + engine; checkout is deleted on
+exit; sanitized artifact refs expire after 30 days; canonical rows require
+explicit repository/workspace deletion. The dry run has no runtime mutation to
+roll back. L2 remains disabled under DEC-126.
+
+No private portfolio manifest, company repository list, target path or SHA was
+created or read in this implementation task. The real portfolio read still
+requires a new explicit founder instruction after a successful private dry-run
+receipt and the remaining operational prerequisites.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

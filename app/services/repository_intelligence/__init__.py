@@ -37,6 +37,14 @@ from app.services.repository_intelligence.l2_isolation import (
     get_hostile_synthetic_l2_isolation_status,
     verify_hostile_synthetic_l2_isolation,
 )
+from app.services.repository_intelligence.portfolio_dry_run import (
+    RepositoryPortfolioDryRunEntryV1,
+    RepositoryPortfolioDryRunManifestV1,
+    RepositoryPortfolioDryRunReceiptV1,
+    RepositoryPortfolioSourceMode,
+    prepare_repository_portfolio_dry_run,
+    validate_repository_portfolio_dry_run_json,
+)
 from app.services.repository_intelligence.persistence import (
     RepositoryAnalysisRequestV1,
     RepositoryArtifactDeletionReceipt,
@@ -84,6 +92,10 @@ __all__ = [
     "RepositoryCrossSourceClaimSetV1",
     "RepositoryCrossSourceClaimV1",
     "RepositoryIntelligenceDeletionResult",
+    "RepositoryPortfolioDryRunEntryV1",
+    "RepositoryPortfolioDryRunManifestV1",
+    "RepositoryPortfolioDryRunReceiptV1",
+    "RepositoryPortfolioSourceMode",
     "RepositoryPortfolioEntryV1",
     "RepositoryPortfolioV1",
     "RepositoryRelationshipAnalysisV1",
@@ -105,11 +117,13 @@ __all__ = [
     "list_expired_repository_artifacts",
     "materialize_repository_checkout",
     "persist_repository_intelligence_result",
+    "prepare_repository_portfolio_dry_run",
     "relationship_signals_from_static_collection",
     "request_repository_analysis_cancellation",
     "validate_repository_relationship_analysis_json",
     "validate_repository_static_collection_json",
     "validate_repository_intelligence_json",
+    "validate_repository_portfolio_dry_run_json",
     "get_hostile_synthetic_l2_isolation_status",
     "verify_hostile_synthetic_l2_isolation",
 ]

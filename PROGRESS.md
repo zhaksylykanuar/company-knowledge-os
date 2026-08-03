@@ -37,7 +37,10 @@ progressive disclosure и evidence drawer только поверх RI-006. RI-0
 доказывает default-deny filesystem/network/process/output/timeout границы, но
 текущий host не позволяет применить hard RAM rlimit и не имеет hard aggregate
 scratch quota, поэтому backend fail closed и real-repository L2 остаётся
-выключенным. Parent PR #35 и RI-006 PR #34 merged в `main` 2026-08-02; RI-007 merged через PR #38, RI-008 merged через PR #39.
+выключенным. Отдельный L0/L1 portfolio dry-run boundary теперь валидирует только
+private exact-SHA manifest и возвращает content-free receipt без provider call,
+target read, job enqueue или persistence. Parent PR #35 и RI-006 PR #34 merged
+в `main` 2026-08-02; RI-007/RI-008/RI-009 merged через PR #38/#39/#40.
 Target company code не выполнялся, company repositories не читались.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
@@ -143,6 +146,15 @@ ledger; тексты источников и evidence не копируются.
   `sandbox-exec` + per-file `RLIMIT_FSIZE` не дают hard aggregate scratch quota.
   Self-test fail closed до probe execution, поэтому receipt не выдаётся и
   real-repository L2 остаётся disabled (DEC-126).
+- Реализован preparation-only Repository Intelligence portfolio dry run без
+  provider/company repository read, checkout, job enqueue, persistence, LLM или
+  external action. Strict `repository_portfolio_dry_run.v1` требует canonical
+  workspace/repository identities, exact full SHA-1, exactly L0+L1, frozen
+  profile/policy/engine и false authorization flags; L2 и absolute/traversing
+  mirror paths fail closed. Owner-private 0600 manifest читается только explicit
+  CLI-командой, а `repository_portfolio_dry_run_receipt.v1` возвращает aggregate
+  counts и fixed output/evidence/failure/restart/retention/rollback boundaries
+  без repository names, SHA, local refs или path values (DEC-127).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -441,10 +453,10 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Не запускать real-repository L2. Для его будущего включения требуется
-   отдельный approved backend с доказуемыми hard RAM и aggregate disk/scratch
-   limits и новый hostile proof. Следующий real portfolio run остаётся отдельно
-   approval-gated и должен быть L0/L1-only.
+1. Заполнить private exact-SHA manifest по
+   `docs/deploy/repository-intelligence-portfolio-dry-run.md` и выполнить только
+   validation-only dry run. Не запускать provider/repository read до нового
+   explicit founder instruction; real-repository L2 остаётся disabled.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -554,6 +566,23 @@ RI-009 implementation/verification (2026-08-03):
   Starlette/httpx deprecation-предупреждение.
 - company repositories не читались/клонировались; company target code и real
   repository commands не выполнялись.
+
+Portfolio dry-run preparation (2026-08-03):
+
+- strict exact-SHA L0/L1-only manifest, content-free receipt и private 0600 CLI
+  validation реализованы без provider/repository read или runtime mutation
+  (DEC-127).
+- receipt фиксирует central-only output, schema/evidence-valid import,
+  one-repository/one-job failure isolation, exact identity restart, checkout
+  cleanup, 30-day artifact refs и no-mutation rollback.
+- focused dry-run suite — **19 passed**; documented CLI smoke passed; guarded
+  `make backend-check` —
+  **943 passed**; full `make frontend-check` — **333 passed** с production
+  build, typecheck и Biome. Ruff, mypy (**116 source files**), dependency audit,
+  Alembic upgrade/check, docs tests, tracked secret scan и `git diff --check`
+  успешно; одно внешнее Starlette/httpx deprecation-предупреждение.
+- private company manifest не создавался; repository list/paths/SHA не читались;
+  real portfolio run и L2 не запускались.
 
 ## Неподвижные границы
 
