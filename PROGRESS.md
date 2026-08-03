@@ -575,7 +575,7 @@ Portfolio dry-run preparation (2026-08-03):
 - receipt фиксирует central-only output, schema/evidence-valid import,
   one-repository/one-job failure isolation, exact identity restart, checkout
   cleanup, 30-day artifact refs и no-mutation rollback.
-- focused dry-run suite — **19 passed**; documented CLI smoke passed; guarded
+- focused dry-run suite — **18 passed**; documented CLI smoke passed; guarded
   `make backend-check` —
   **943 passed**; full `make frontend-check` — **333 passed** с production
   build, typecheck и Biome. Ruff, mypy (**116 source files**), dependency audit,
