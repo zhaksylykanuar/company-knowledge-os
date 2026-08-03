@@ -443,9 +443,15 @@ Security follow-up (2026-08-03):
   `https://github.com` validation; lookalike hosts, credentials, alternate
   ports, query/fragment и embedded hostname strings fail closed to `None`
   (DEC-122).
-- focused GitHub repository read/API suite — **10 passed**; guarded
-  `make backend-check` — **898 passed**; `make frontend-check` —
-  **326 passed** с production build, typecheck и lint.
+- GitHub App manifest `html_url` теперь принимается только как exact
+  `https://github.com/apps/<validated-slug>`, а setup repository links — только
+  как exact credential-free `https://github.com/<owner>/<repo>` без
+  query/fragment и только при совпадении с canonical `full_name`; unsafe
+  provider metadata fail closed to `None` (DEC-123).
+- focused GitHub App setup suite — **16 passed**; guarded
+  `make backend-check` — **899 passed**; `make frontend-check` —
+  **326 passed** с production build, typecheck и lint. Ruff, mypy,
+  dependency audit, Alembic и tracked secret scan также прошли.
 - RI-007 не начат и остаётся отдельно approval-gated.
 
 ## Неподвижные границы
