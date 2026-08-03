@@ -3955,6 +3955,35 @@ no provider call, production mutation outside the existing setup transaction,
 migration, UI, company repository read, target execution, LLM path or RI-007
 behavior.
 
+## DEC-124 - Repository Intelligence UI Reads Only Bounded RI-006 Projections
+
+Decision (2026-08-03): RI-007 is a read-only product projection over canonical
+`Repository`/`EvidenceRef` rows and the workspace-scoped RI-006 tables. It adds
+four bounded GET contracts: repository portfolio, repository detail, immutable
+audit history and current directional graph. Every query is scoped by
+`workspace_id`; cross-workspace repository IDs return not found.
+
+Portfolio output is capped at 200 repositories, detail output at 100 facts,
+100 relationships, 100 findings, 50 contradictions and 20 evidence refs per
+item, history at 50 runs, and graph output at 200 nodes/500 edges. The API
+returns sanitized evidence selector/kind/source/URL metadata only. It never
+returns `EvidenceRef.quote`, `SourceRecord.payload`, analyzer artifacts,
+artifact `storage_ref`, credentials, raw repository bodies or provider
+payloads.
+
+The Company UI uses progressive disclosure. It presents purpose,
+responsibilities, interfaces, dependencies, deployment role, owner candidates,
+findings, contradictions, unknowns, audit freshness/history and evidence.
+Directional edges visually distinguish observed, inferred, human-confirmed and
+unresolved-candidate states. Product/type/owner/lifecycle/severity/staleness
+filters operate only on the already loaded bounded portfolio and do not start
+provider reads or analysis.
+
+RI-007 performs no migration, provider/company repository read, checkout,
+target execution, LLM call, external action or human-resolution write. The
+separate first real portfolio run and RI-008 cross-source intelligence remain
+approval-gated.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001–RI-006 implemented; RI-007 is the next approval-gated slice
+Status: RI-001–RI-007 implemented on synthetic data; RI-008 is approval-gated
 Prepared: 2026-07-31
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
@@ -15,9 +15,10 @@ under DEC-117. Bounded deterministic static collectors are implemented under
 DEC-118. Directional relationship candidates and bounded graph validation are
 implemented under DEC-119. Durable jobs/runs/facts/edges/findings/
 contradictions, canonical evidence links and complete-only reconciliation are
-implemented under DEC-120 and migration `11c7b724c929`. No provider portfolio
-read, target execution, UI or LLM path exists yet. Preparation status remains
-`preparing`.
+implemented under DEC-120 and migration `11c7b724c929`. Bounded
+portfolio/detail/history/graph read APIs and Company UI are implemented under
+DEC-124 using only RI-006 synthetic data. No provider portfolio read, target
+execution or LLM path exists. Preparation status remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1516,6 +1517,9 @@ Done when: Migration, isolation, retry, partial-run, regression, and gate checks
 
 ### RI-007 — Portfolio and detail UI
 
+Status: implemented and verified on synthetic RI-006 PostgreSQL rows
+(DEC-124).
+
 ```text
 Goal: Show repository purpose, relationships, findings, unknowns, and evidence.
 Context: RI read APIs and product shell.
@@ -1590,10 +1594,9 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-007 — portfolio/detail read APIs and UI**, but only
-after separate approval. RI-006 merged into `main` on 2026-08-02; read only its
-workspace-scoped persistence boundary and do not start a provider portfolio
-run.
+Recommended next task: **RI-008 — cross-source contradictions**, but only after
+separate approval and RI-007 review/merge. RI-007 reads only the workspace-scoped
+RI-006 persistence boundary; do not start a provider portfolio run.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1601,16 +1604,14 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-007 for FounderOS Repository Intelligence.
+Goal: Implement RI-008 cross-source Repository Intelligence.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Use only workspace-scoped RI-006 read models; progressive
-disclosure, evidence drawer, observed/inferred distinction and unknowns; no
-company repository read, provider portfolio run, migration, external action or
-LLM mutation. Preserve unrelated working-tree changes.
-Done when: portfolio/detail/history/graph APIs and UI pass focused backend/UI
-tests, typecheck, lint, build, accessibility/browser checks, uv run ruff check .
-and guarded make backend-check.
+Constraints: Preserve competing claims and strict evidence; no company
+repository read, provider portfolio run, external action or LLM mutation.
+Preserve unrelated working-tree changes.
+Done when: Bounded synthetic GitHub/Jira/document contradiction fixtures and
+unsupported-claim rejection pass with focused/full gates.
 ```

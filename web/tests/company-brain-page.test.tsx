@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { renderToStaticMarkup } from "react-dom/server";
+
 import CompanyBrainPage from "../app/company-brain/page";
-import { CompanyBrainPageClient } from "../components/CompanyBrainPageClient";
+import {
+  CompanyBrainPageClient,
+  RepositoryIntelligenceEntry
+} from "../components/CompanyBrainPageClient";
 import {
   BACKSTAGE_NAV,
   isNavigationItemActive,
@@ -43,6 +48,10 @@ test("hidden company detail routes remain in Company while providers have no nav
   assert.equal(isNavigationItemActive("/github", settings), false);
   assert.equal(isNavigationItemActive("/actions", company), true);
   assert.equal(isNavigationItemActive("/documents", company), true);
+  assert.equal(
+    isNavigationItemActive("/company-brain/repositories", company),
+    true
+  );
 });
 
 test("company brain route renders the client world shell", async () => {
@@ -50,6 +59,13 @@ test("company brain route renders the client world shell", async () => {
   assert.equal(page.type, CompanyBrainPageClient);
   assert.equal(page.props.profileSelector, null);
   assert.equal(page.props.profileSelectorRequested, false);
+});
+
+test("company brain shell exposes Repository Intelligence as progressive detail", async () => {
+  const html = renderToStaticMarkup(<RepositoryIntelligenceEntry />);
+  assert.match(html, /Repository Intelligence/);
+  assert.match(html, /Карта репозиториев/);
+  assert.match(html, /href="\/company-brain\/repositories"/);
 });
 
 test("company brain route preserves explicit profile intent for client validation", async () => {

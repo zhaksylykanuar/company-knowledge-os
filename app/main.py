@@ -22,6 +22,7 @@ from app.api.gmail import router as gmail_router
 from app.api.health import router as health_router
 from app.api.headquarters import router as headquarters_router
 from app.api.jira import router as jira_router
+from app.api.repository_intelligence import router as repository_intelligence_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
 from app.core.config import resolved_cors_allowed_origins, settings
@@ -124,6 +125,7 @@ app.include_router(assistant_router, dependencies=protected_api_dependencies)
 app.include_router(headquarters_router, dependencies=protected_api_dependencies)
 app.include_router(company_map_router, dependencies=protected_api_dependencies)
 app.include_router(workspace_company_brain_router, dependencies=protected_api_dependencies)
+app.include_router(repository_intelligence_router, dependencies=protected_api_dependencies)
 app.include_router(briefings_router, dependencies=protected_api_dependencies)
 app.include_router(actions_router, dependencies=protected_api_dependencies)
 # Legacy filesystem Company Brain preview: operator-only. These routes are not

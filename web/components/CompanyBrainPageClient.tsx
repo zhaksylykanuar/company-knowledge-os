@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { M } from "../lib/messages";
@@ -31,6 +32,7 @@ export function CompanyBrainPageClient({
         profileSelectorRequested={profileSelectorRequested}
         refreshSignal={refreshSignal}
       />
+      <RepositoryIntelligenceEntry />
       <details
         className="company-data-vault"
         onToggle={(event) => setDataLayerOpen(event.currentTarget.open)}
@@ -50,5 +52,25 @@ export function CompanyBrainPageClient({
         ) : null}
       </details>
     </>
+  );
+}
+
+export function RepositoryIntelligenceEntry() {
+  return (
+    <section className="panel">
+      <div className="section-header">
+        <div>
+          <span className="eyebrow">Repository Intelligence</span>
+          <h2>Карта репозиториев</h2>
+          <p className="muted">
+            Назначение, направленные связи, риски, неизвестные и история
+            сохранённых аудитов.
+          </p>
+        </div>
+        <Link className="button secondary" href="/company-brain/repositories">
+          Открыть карту
+        </Link>
+      </div>
+    </section>
   );
 }

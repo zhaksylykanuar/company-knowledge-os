@@ -2,6 +2,21 @@
 
 ## 2026-08-03
 
+### Added
+
+- Added RI-007 Repository Intelligence read models and Company UI over
+  workspace-scoped RI-006 persistence. The bounded read-only API exposes the
+  repository portfolio, detail, immutable audit history, current directional
+  graph, findings, contradictions, unknowns, confirmation candidates and
+  sanitized evidence metadata.
+- Added a Company-zone repository map with local filters for repository type,
+  product candidate, owner state, lifecycle, finding severity and staleness;
+  progressive detail sections; observed/inferred/confirmed/candidate graph
+  states; audit freshness/history; and an evidence drawer.
+- Added synthetic PostgreSQL API coverage for workspace isolation, bounds and
+  non-mutation plus frontend coverage for same-origin GETs, local filters,
+  progressive disclosure, evidence states and safe route selectors.
+
 ### Security
 
 - Replaced the local GitHub repository inventory's substring URL check with
@@ -15,6 +30,10 @@
   repository identity. Credentials, ports, extra paths, whitespace/control
   characters, backslashes, query values, fragments, and malformed or lookalike
   hosts are discarded.
+- RI-007 never returns raw source bodies, EvidenceRef quotes, SourceRecord
+  payloads or artifact storage references. It performs no provider call,
+  repository read/checkout, target execution, LLM call, external write or
+  human-resolution mutation.
 
 ## 2026-08-02
 

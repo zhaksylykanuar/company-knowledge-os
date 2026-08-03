@@ -1,0 +1,417 @@
+.page {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.breadcrumb {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 14px;
+  gap: 8px;
+}
+
+.breadcrumb a {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.stateStack {
+  display: grid;
+  gap: 12px;
+}
+
+.stateStack button {
+  justify-self: start;
+}
+
+.modeTabs {
+  background: var(--panel-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+}
+
+.modeTabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 9px 13px;
+}
+
+.modeTabs .activeTab {
+  background: var(--panel);
+  color: var(--accent-text);
+}
+
+.filters {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.6fr) repeat(6, minmax(120px, 1fr));
+}
+
+.filter,
+.search {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+  min-width: 0;
+}
+
+.filter select,
+.search input {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: inherit;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.workspace {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(250px, 0.8fr) minmax(400px, 1.6fr) minmax(240px, 0.7fr);
+  min-width: 0;
+}
+
+.repositoryList,
+.detail,
+.graph {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.repositoryList {
+  max-height: calc(100vh - 190px);
+  overflow: auto;
+  position: sticky;
+  top: 16px;
+}
+
+.sectionTitle {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.sectionTitle h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.repositoryCard {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  text-align: left;
+  width: 100%;
+}
+
+.repositoryCard:hover,
+.repositoryCard:focus-visible,
+.selectedCard {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.cardTopline,
+.itemHeading {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.cardTopline strong {
+  overflow-wrap: anywhere;
+}
+
+.repositoryType,
+.relationshipType {
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cardPurpose {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.cardMetrics {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.detailHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.detailHeader h2 {
+  margin: 4px 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.detailHeader p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.detailBadges {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.auditMeta {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.auditMeta div {
+  background: var(--panel-muted);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.auditMeta dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.auditMeta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.disclosure {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.disclosure > summary {
+  cursor: pointer;
+  font-weight: 700;
+  list-style-position: outside;
+  margin-left: 16px;
+}
+
+.disclosure > p,
+.disclosure > ul,
+.itemList {
+  margin: 12px 0 0;
+}
+
+.itemList {
+  display: grid;
+  gap: 10px;
+}
+
+.item {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.item p {
+  margin: 0;
+}
+
+.claimBadge,
+.severity,
+.stale,
+.graphLegend span {
+  border-radius: 999px;
+  display: inline-flex;
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
+.observed {
+  background: #e7f4ed;
+  color: #16643c;
+}
+
+.inferred {
+  background: #fff3d6;
+  color: #7b5200;
+}
+
+.confirmed {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.candidate,
+.stale {
+  background: #ecebf3;
+  color: #5c5870;
+}
+
+.severityCritical,
+.severityHigh {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.severityMedium {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.severityLow,
+.severityInfo {
+  background: var(--panel-muted);
+  color: var(--muted);
+}
+
+.evidenceButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.evidenceButtons button {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.evidenceColumn {
+  min-width: 0;
+  position: sticky;
+  top: 16px;
+}
+
+.graph {
+  gap: 16px;
+}
+
+.graphLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edgeList {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.edge {
+  border: 1px solid var(--border);
+  border-left-width: 5px;
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px;
+}
+
+.edge div {
+  overflow-wrap: anywhere;
+}
+
+.edge p,
+.edge small {
+  color: var(--muted);
+  margin: 0;
+}
+
+.boundary {
+  background: var(--panel-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  margin: 0;
+  padding: 13px 15px;
+}
+
+@media (max-width: 1200px) {
+  .filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .search {
+    grid-column: 1 / -1;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.6fr);
+  }
+
+  .evidenceColumn {
+    grid-column: 1 / -1;
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .filters,
+  .workspace,
+  .edgeList,
+  .auditMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .search {
+    grid-column: auto;
+  }
+
+  .repositoryList {
+    max-height: none;
+    position: static;
+  }
+
+  .detailHeader,
+  .cardTopline,
+  .itemHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .detailBadges {
+    align-items: flex-start;
+  }
+}
