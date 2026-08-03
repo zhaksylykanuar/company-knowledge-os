@@ -437,6 +437,17 @@ Merge/verification RI-006 (2026-08-02):
 - `make frontend-check` — **326 passed**, production build, typecheck и lint
   успешно на rebuilt RI-006 branch перед merge PR #34.
 
+Security follow-up (2026-08-03):
+
+- local GitHub inventory display/evidence URLs теперь проходят parsed exact
+  `https://github.com` validation; lookalike hosts, credentials, alternate
+  ports, query/fragment и embedded hostname strings fail closed to `None`
+  (DEC-122).
+- focused GitHub repository read/API suite — **10 passed**; guarded
+  `make backend-check` — **898 passed**; `make frontend-check` —
+  **326 passed** с production build, typecheck и lint.
+- RI-007 не начат и остаётся отдельно approval-gated.
+
 ## Неподвижные границы
 
 - Provider secrets вводятся в UI один раз, шифруются до persistence и не

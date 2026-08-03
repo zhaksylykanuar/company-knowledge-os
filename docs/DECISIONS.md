@@ -3911,6 +3911,27 @@ RI-006/RI-007 behavior or weaken existing encryption and workspace boundaries.
 DEC-120 records the RI-006 persistence decision merged through PR #34 on
 2026-08-02.
 
+## DEC-122 - Local GitHub Inventory Links Require An Exact Web Origin
+
+Decision (2026-08-03): repository and evidence URLs projected from the local
+GitHub inventory are untrusted display metadata. They are retained only when
+URL parsing proves HTTPS, exact host `github.com`, no username/password, no
+non-default port, and no query or fragment. Substring checks, suffix checks,
+embedded hostnames and lookalike domains are not accepted.
+
+This boundary performs no provider call and does not establish repository
+identity; canonical workspace rows and evidence refs remain authoritative.
+Unsafe URLs become `None` rather than being repaired, redirected or copied into
+downstream normalization/briefing projections. Direct and public API tests
+cover credentials, alternate schemes/ports, lookalike hosts, embedded
+`github.com`, malformed paths, query values and fragments.
+
+The remaining CodeQL warning-level findings reviewed on this date are
+test-analysis artifacts: deliberate sentinel statements inside
+`pytest.raises` context managers and provider-call count assertions after
+one-time-state rejection. They remain as useful regression assertions and do
+not represent production control-flow or security defects.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

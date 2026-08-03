@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -236,9 +237,30 @@ def _safe_bool(value: Any) -> bool | None:
 
 def _safe_github_url(value: Any) -> str | None:
     text = _safe_text(value)
-    if text and "github.com" in text and "@" not in text:
-        return text
-    return None
+    if (
+        text is None
+        or "\\" in text
+        or any(character.isspace() for character in text)
+        or any(ord(character) < 32 or ord(character) == 127 for character in text)
+    ):
+        return None
+    try:
+        parsed = urlsplit(text)
+        port = parsed.port
+    except (UnicodeError, ValueError):
+        return None
+    if (
+        parsed.scheme.casefold() != "https"
+        or parsed.hostname is None
+        or parsed.hostname.casefold() != "github.com"
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in {None, 443}
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    return text
 
 
 def _safe_datetime_text(value: Any) -> str | None:

@@ -108,6 +108,33 @@ def _inventory_payload(
     }
 
 
+def test_safe_github_url_requires_exact_https_origin() -> None:
+    for valid in (
+        "https://github.com/qtwin-io/founderos-api",
+        "https://GITHUB.com/qtwin-io/founderos-api/issues/42",
+        "https://github.com:443/qtwin-io/founderos-api",
+    ):
+        assert github_repository_service._safe_github_url(valid) == valid
+
+    for invalid in (
+        None,
+        "",
+        "http://github.com/qtwin-io/founderos-api",
+        "https://github.com.evil.example/qtwin-io/founderos-api",
+        "https://evil.example/github.com/qtwin-io/founderos-api",
+        "https://github.com@evil.example/qtwin-io/founderos-api",
+        "https://user:password@github.com/qtwin-io/founderos-api",
+        "https://github.com:444/qtwin-io/founderos-api",
+        "https://github.com/qtwin-io/founderos-api?token=hidden",
+        "https://github.com/qtwin-io/founderos-api#fragment",
+        "https://github.com\\@evil.example/qtwin-io/founderos-api",
+        "https://github.com/qtwin-io/founderos api",
+        "https://github.com/qtwin-io/founderos-api\x00hidden",
+        "not-a-url-containing-github.com",
+    ):
+        assert github_repository_service._safe_github_url(invalid) is None
+
+
 async def _count(model: type) -> int:
     async with AsyncSessionLocal() as session:
         return int(await session.scalar(select(func.count()).select_from(model)) or 0)
@@ -357,6 +384,74 @@ async def test_github_repositories_preserves_source_event_evidence_refs(
         repo = response.json()["repositories"][0]
         assert repo["evidence_refs"][0]["ref"] == "sevt-test-event-api"
         assert repo["metadata"]["source_event_count"] == 2
+    finally:
+        await _cleanup_workspace_fixture(marker)
+
+
+async def test_github_repositories_remove_untrusted_source_and_evidence_urls(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_fixture(marker)
+
+    async def fake_inventory(**_kwargs):
+        return _inventory_payload(
+            [
+                {
+                    "repo_key": "hostile-url-api",
+                    "full_name": "qtwin-io/hostile-url-api",
+                    "provider_key": "github",
+                    "source_class": INVENTORY_SOURCE_EVENTS,
+                    "visibility": "private",
+                    "archived": False,
+                    "source_url": (
+                        "https://github.com.evil.example/qtwin-io/hostile-url-api"
+                    ),
+                    "last_observed_at": "2026-08-03T00:00:00+00:00",
+                    "evidence_refs": [
+                        {
+                            "kind": "source_event",
+                            "source": INVENTORY_SOURCE_EVENTS,
+                            "ref": "sevt-hostile-url",
+                            "url": (
+                                "https://evil.example/"
+                                "github.com/qtwin-io/hostile-url-api"
+                            ),
+                        }
+                    ],
+                }
+            ],
+            source_class=INVENTORY_SOURCE_EVENTS,
+        )
+
+    monkeypatch.setattr(
+        github_repository_service,
+        "load_repository_source_inventory",
+        fake_inventory,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200
+        repository = response.json()["repositories"][0]
+        assert repository["source_url"] is None
+        assert repository["evidence_refs"] == [
+            {
+                "kind": "source_event",
+                "source": INVENTORY_SOURCE_EVENTS,
+                "ref": "sevt-hostile-url",
+                "url": None,
+            }
+        ]
+        assert "evil.example" not in response.text
     finally:
         await _cleanup_workspace_fixture(marker)
 

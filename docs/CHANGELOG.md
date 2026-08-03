@@ -1,5 +1,15 @@
 # FounderOS Changelog
 
+## 2026-08-03
+
+### Security
+
+- Replaced the local GitHub repository inventory's substring URL check with
+  parsed exact-origin validation. Display/evidence links now require HTTPS,
+  exact `github.com`, no credentials, no non-default port, and no
+  query/fragment; hostile lookalike hosts and embedded `github.com` strings are
+  discarded.
+
 ## 2026-08-02
 
 ### Added
