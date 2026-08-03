@@ -1,7 +1,7 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: RI-001–RI-008 реализованы на synthetic data; следующий
-approval-gated этап — RI-009
+Статус: RI-001–RI-009 реализованы на synthetic data; RI-009 fail closed,
+real-repository L2 выключен; следующий real portfolio run approval-gated
 Дата подготовки: 2026-07-31
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
@@ -1134,16 +1134,37 @@ confirmation writes остаются отдельными задачами. Бе
 
 ### RI-009 — L2 isolation
 
-Варианты:
+Статус: **реализован 2026-08-03 fail closed** (DEC-126).
 
-1. доказать isolation на hostile synthetic fixtures;
-2. зафиксировать:
+Реализован только closed `hostile-synthetic-v1` proof:
+
+- нет repository path, arbitrary command/args/env/network/artifact inputs;
+- fixed C probe компилируется trusted `/usr/bin/clang` до sandbox;
+- `sandbox-exec` использует default deny и explicit network deny;
+- synthetic source доступен read-only, запись разрешена только в private scratch;
+- ambient env, FounderOS tree, synthetic `.env`, DB socket и Docker socket не
+  передаются;
+- CPU, file size, process count, open files, combined output и wall time bounded;
+- ошибки и receipt status-only; run directory удаляется на любом exit;
+- на Linux/CI и при отсутствии approved backend поведение fail closed.
+
+Hostile fixtures проверяют filesystem/network escape, source/outside write,
+secret/DB/Docker socket access, output flood, timeout, CPU loop, oversized
+artifact, process spawn и memory exhaustion.
+
+Текущий macOS 26.6 host не позволяет снизить `RLIMIT_AS`, `RLIMIT_DATA` или
+`RLIMIT_RSS` (`EINVAL`). Кроме того, `sandbox-exec` и per-file `RLIMIT_FSIZE`
+не дают hard aggregate scratch quota. Так как hard RAM и aggregate disk limits
+обязательны, self-tests прекращают run до probe execution и не выдают enabled
+receipt:
 
 ```text
 L2 disabled for first portfolio run
 ```
 
-Для первого реального запуска рекомендуется оставить L2 выключенным.
+Первый реальный запуск должен остаться L0/L1-only. Для включения L2 нужен новый
+отдельно approved container/VM/service backend и повторный hostile proof всех
+hard bounds.
 
 ## 13. Persistence entities
 
@@ -1637,7 +1658,9 @@ npm run build
 - отдельный `RepositoryAnalysisJob`;
 - checkout удаляется сразу;
 - network выключен;
-- L2 выключен до отдельного approval;
+- RI-009 hostile-synthetic backend fail closed без hard RAM и aggregate
+  scratch proof;
+- real-repository L2 выключен до нового approved backend и approval;
 - большие artifacts хранятся в approved raw storage, refs — 30 дней;
 - canonical rows — до explicit repository/workspace deletion;
 - canonical `EvidenceRef` links и отдельная contradiction table;
@@ -1647,27 +1670,14 @@ npm run build
 ## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-009 — isolated L2 verification.
-
-Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
-
-Constraints:
-- Only RI-009 after separate approval; RI-008 is implemented.
-- No host execution, FounderOS secrets/database/sockets, Docker socket or
-  default network.
-- No company repository read or real-repository L2.
-- Do not touch .env.local, .local, credentials, company data or existing connections.
-- Update PROGRESS.md, docs/TODO.md, and docs/CHANGELOG.md.
-- Nothing may be pushed.
-
-Done when:
-- Hostile synthetic escape/resource/timeout/sanitization fixtures pass.
-- git diff --check passes.
-- Staged and tracked secret scans pass.
-- uv run ruff check . passes.
-- Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-009 commit is created.
-- Report the result and wait for approval before any real portfolio/L2 run.
+Goal: Prepare the first controlled Repository Intelligence portfolio run.
+Context: RI-001–RI-009 are implemented on synthetic data; DEC-126 keeps real
+L2 disabled.
+Constraints: Separate approval; L0/L1 only; read-only approved manifest and
+exact SHA; no target execution, writes, LLM mutation or secret exposure.
+Done when: A dry-run plan names the approved repositories, audit levels, exact
+evidence/output boundaries, failure isolation, retention and rollback without
+starting the run.
 ```
 
 ## 27. Краткий финальный checklist
@@ -1693,19 +1703,20 @@ Done when:
 - [x] зафиксировать DEC-124;
 - [x] реализовать RI-008 только после отдельного approval;
 - [x] зафиксировать DEC-125;
-- [ ] после review/merge начать RI-009 только после отдельного approval.
+- [x] реализовать RI-009 hostile-synthetic proof после отдельного approval;
+- [x] зафиксировать DEC-126 и fail-closed real-repository L2;
+- [ ] подготовить отдельно approved L0/L1-only real portfolio run.
 
 ### Во время подготовки
 
-- [ ] только synthetic fixtures;
-- [ ] zero company repository reads;
-- [ ] один тикет за раз;
-- [ ] focused tests;
-- [ ] Ruff;
-- [ ] guarded backend-check;
-- [ ] secret scans;
-- [ ] local commits;
-- [ ] никакого push.
+- [x] только synthetic fixtures;
+- [x] zero company repository reads;
+- [x] один тикет за раз;
+- [x] focused tests;
+- [x] Ruff;
+- [x] guarded backend-check;
+- [x] frontend-check;
+- [x] secret scans;
 
 ### Перед реальным portfolio run
 
