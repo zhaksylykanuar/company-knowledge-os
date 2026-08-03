@@ -1,13 +1,14 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001–RI-008 implemented on synthetic data; RI-009 is approval-gated
+Status: RI-001–RI-009 implemented on synthetic data; RI-009 fails closed and
+real-repository L2 remains disabled
 Prepared: 2026-07-31
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
 relate to one another, what risks exist, and how that evidence connects to the
 rest of FounderOS.
 
-Implementation update (2026-07-31): strict `repository_intelligence.v1`,
+Implementation update (2026-08-03): strict `repository_intelligence.v1`,
 synthetic L0/L1/L2 fixtures and contract tests are implemented under DEC-115.
 Canonical workspace-scoped synthetic L0 is implemented under DEC-116.
 Synthetic-only external exact-SHA checkout is implemented
@@ -17,10 +18,13 @@ implemented under DEC-119. Durable jobs/runs/facts/edges/findings/
 contradictions, canonical evidence links and complete-only reconciliation are
 implemented under DEC-120 and migration `11c7b724c929`. Bounded
 portfolio/detail/history/graph read APIs and Company UI are implemented under
-DEC-124 using only RI-006 synthetic data. No provider portfolio read, target
-execution or LLM path exists. Strict exact-identity GitHub/Jira/document
-cross-source comparisons are implemented under DEC-125. Preparation status
-remains `preparing`.
+DEC-124 using only RI-006 synthetic data. Strict exact-identity
+GitHub/Jira/document cross-source comparisons are implemented under DEC-125.
+The RI-009 hostile-synthetic macOS candidate is recorded under DEC-126 and fails
+closed before execution because this host cannot enforce the required hard RAM
+and aggregate scratch limits. No provider portfolio read, company target
+execution or LLM path exists; real-repository L2 remains disabled. Preparation
+status remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1599,8 +1603,10 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-009 — L2 isolation**, but only after separate
-approval and RI-008 review/merge. Do not start a provider portfolio run.
+Recommended next task: prepare a separately approved L0/L1-only portfolio dry
+run. Do not enable real-repository L2 without a new approved backend and hostile
+proof of every hard RAM, aggregate disk, CPU, process, output and wall-time
+bound.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1608,13 +1614,13 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-009 isolated L2 verification.
+Goal: Prepare the first controlled Repository Intelligence portfolio dry run.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
-docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
-what every repository does and the evidence-backed directional relationships
-between repositories.
-Constraints: No host execution, FounderOS secrets/database/sockets, Docker
-socket or default network; no company repository read. Preserve unrelated work.
-Done when: Hostile synthetic escape/resource/timeout/sanitization fixtures pass
-and real-repository L2 remains disabled.
+docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. RI-001–RI-009 are prepared
+on synthetic data; DEC-126 keeps real-repository L2 disabled.
+Constraints: Separate approval; L0/L1 only; read-only approved manifest and
+exact SHA; no target execution, writes, LLM mutation or secret exposure.
+Done when: A dry-run plan names approved repositories, audit levels, exact
+evidence/output boundaries, failure isolation, retention and rollback without
+starting the run.
 ```

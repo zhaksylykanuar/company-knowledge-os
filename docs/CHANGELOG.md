@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added RI-009 closed hostile-synthetic L2 isolation contracts and a fixed
+  containment probe. The profile accepts no repository path or arbitrary
+  command/environment/network input and returns only a bounded status receipt
+  after every approved check succeeds.
+- Added a separate bounded `repository_l2_isolation_status.v1` receipt that
+  reports only verified/disabled state, a controlled reason code and check
+  count.
+- Added portable fail-closed tests plus a macOS self-test for read-only source,
+  scratch-only writes, FounderOS/secret/socket denial, default-deny network,
+  process/output/file/CPU/wall-time bounds and cleanup.
+
 - Added RI-008 strict structured cross-source Repository Intelligence claims.
   Sanitized GitHub issue/PR metadata, Jira task metadata, and opt-in internal
   documents can carry bounded versioned assertions about one exact repository
@@ -26,6 +37,16 @@
   progressive disclosure, evidence states and safe route selectors.
 
 ### Security
+
+- RI-009 never falls back to unsandboxed execution. The current macOS host
+  rejects enforceable `RLIMIT_AS`, `RLIMIT_DATA` and `RLIMIT_RSS` lowering, and
+  `sandbox-exec` plus per-file `RLIMIT_FSIZE` cannot prove a hard aggregate
+  scratch quota. The backend fails closed before executing the hostile probe,
+  emits no enabled receipt, and keeps real-repository L2 disabled.
+- The synthetic profile forwards no ambient environment, mounts no Docker
+  socket, denies network explicitly, exposes only the fixed source fixture as
+  readable and one private scratch directory as writable, and sanitizes all
+  errors/output metadata.
 
 - Cross-source comparisons require exact workspace repository UUID,
   case-insensitive canonical full name, fact type, claim ID and controlled

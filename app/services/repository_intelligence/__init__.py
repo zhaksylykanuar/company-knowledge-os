@@ -26,6 +26,17 @@ from app.services.repository_intelligence.cross_source import (
 from app.services.repository_intelligence.l0 import (
     build_workspace_repository_intelligence_l0,
 )
+from app.services.repository_intelligence.l2_isolation import (
+    RepositoryL2Check,
+    RepositoryL2CheckReceiptV1,
+    RepositoryL2IsolationPolicy,
+    RepositoryL2IsolationReceiptV1,
+    RepositoryL2IsolationRequest,
+    RepositoryL2IsolationStatusReceiptV1,
+    RepositoryL2Profile,
+    get_hostile_synthetic_l2_isolation_status,
+    verify_hostile_synthetic_l2_isolation,
+)
 from app.services.repository_intelligence.persistence import (
     RepositoryAnalysisRequestV1,
     RepositoryArtifactDeletionReceipt,
@@ -59,6 +70,13 @@ __all__ = [
     "RepositoryCheckoutPolicy",
     "RepositoryCheckoutRequest",
     "RepositoryIntelligenceV1",
+    "RepositoryL2Check",
+    "RepositoryL2CheckReceiptV1",
+    "RepositoryL2IsolationPolicy",
+    "RepositoryL2IsolationReceiptV1",
+    "RepositoryL2IsolationRequest",
+    "RepositoryL2IsolationStatusReceiptV1",
+    "RepositoryL2Profile",
     "RepositoryAnalysisRequestV1",
     "RepositoryArtifactDeletionReceipt",
     "RepositoryArtifactManifestItemV1",
@@ -92,4 +110,6 @@ __all__ = [
     "validate_repository_relationship_analysis_json",
     "validate_repository_static_collection_json",
     "validate_repository_intelligence_json",
+    "get_hostile_synthetic_l2_isolation_status",
+    "verify_hostile_synthetic_l2_isolation",
 ]

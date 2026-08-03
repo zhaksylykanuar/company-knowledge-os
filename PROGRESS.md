@@ -32,10 +32,13 @@ synthetic PostgreSQL data. RI-007 добавляет bounded workspace-scoped
 portfolio/detail/history/graph read APIs и Company UI с фильтрами,
 progressive disclosure и evidence drawer только поверх RI-006. RI-008
 добавляет strict structured cross-source claims и bounded read-time comparison
-с canonical GitHub issues/PRs, Jira tasks и opt-in internal documents. Parent
-PR #35 и RI-006 PR #34 merged в `main` 2026-08-02; RI-007 merged через PR #38,
-RI-008 реализован на отдельной branch 2026-08-03. Target code не выполнялся,
-company repositories не читались.**
+с canonical GitHub issues/PRs, Jira tasks и opt-in internal documents. RI-009
+добавляет closed hostile-synthetic L2 isolation proof: macOS `sandbox-exec`
+доказывает default-deny filesystem/network/process/output/timeout границы, но
+текущий host не позволяет применить hard RAM rlimit и не имеет hard aggregate
+scratch quota, поэтому backend fail closed и real-repository L2 остаётся
+выключенным. Parent PR #35 и RI-006 PR #34 merged в `main` 2026-08-02; RI-007 merged через PR #38, RI-008 merged через PR #39.
+Target company code не выполнялся, company repositories не читались.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -127,6 +130,19 @@ ledger; тексты источников и evidence не копируются.
   repository identities, duplicate claims, malformed/oversized JSON, unsupported
   fact-field pairs и free-text/fuzzy inputs fail closed; никаких follow-up
   tasks и human confirmations не создаётся (DEC-125).
+- Реализован RI-009 fail-closed L2 isolation boundary без provider/company
+  repository read, persistence, API/UI, LLM и real-repository execution. Closed
+  `hostile-synthetic-v1` profile не принимает repository path, arbitrary command,
+  env, network destination или artifact selector; fixed C probe собирается
+  trusted host compiler до sandbox и запускается с minimal env, default-deny
+  `sandbox-exec`, read-only source, scratch-only writes, denied network и hard
+  CPU/file/process/output/wall-time bounds. Hostile fixtures доказывают блокировку
+  FounderOS tree, synthetic `.env`/DB/Docker sockets, source/outside writes и
+  network.
+  macOS 26.6 отказывает в lowering `RLIMIT_AS/DATA/RSS`; кроме того,
+  `sandbox-exec` + per-file `RLIMIT_FSIZE` не дают hard aggregate scratch quota.
+  Self-test fail closed до probe execution, поэтому receipt не выдаётся и
+  real-repository L2 остаётся disabled (DEC-126).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -425,8 +441,10 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Review/merge RI-008 branch; после этого не начинать RI-009 L2 isolation или
-   первый реальный portfolio run без отдельного approval.
+1. Не запускать real-repository L2. Для его будущего включения требуется
+   отдельный approved backend с доказуемыми hard RAM и aggregate disk/scratch
+   limits и новый hostile proof. Следующий real portfolio run остаётся отдельно
+   approval-gated и должен быть L0/L1-only.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -508,11 +526,34 @@ RI-008 implementation/verification (2026-08-03):
 - exact source/fact identity обязателен; free text, fuzzy matching, unsupported
   conclusions и foreign workspace/repository claims не создают contradiction.
 - no duplicate task/action, migration, provider/LLM call или write path
-  добавлен. RI-009 и real portfolio run не начаты.
+  добавлен. RI-009 ещё не входил в RI-008 scope; real portfolio run не начат.
 - authenticated same-origin runtime smoke подтвердил exact GitHub/Jira/PR/
   document comparisons, session auth, security headers и отсутствие raw claim
   envelopes/source bodies/artifact paths. Visual desktop/mobile browser
   inspection не выполнен: browser-control sessions отсутствовали.
+
+RI-009 implementation/verification (2026-08-03):
+
+- closed hostile-synthetic-only `macos_sandbox_exec` profile и strict
+  `repository_l2_isolation_receipt.v1` contract реализованы без arbitrary
+  repository/command/environment/network inputs (DEC-126).
+- fixed hostile probe проверяет read-only source, scratch-only writes, запрет
+  FounderOS tree, synthetic secret/DB/Docker-socket paths и network, а runner
+  bounds CPU, file size, processes, combined output и wall time; run directory удаляется
+  на fail-closed exit.
+- macOS host не принимает lowering `RLIMIT_AS`, `RLIMIT_DATA` или `RLIMIT_RSS`;
+  даже при будущей поддержке RAM текущий backend не имеет hard aggregate
+  scratch quota. Self-tests обнаруживают оба отсутствующих hard bounds до probe
+  execution, возвращают только sanitized unavailable error и не выдают enabled
+  receipt. Real-repository L2 disabled.
+- focused RI-009 suite — **10 passed**; focused RI-001–RI-009 suite —
+  **117 passed**; guarded `make backend-check` — **925 passed**; full
+  `make frontend-check` — **333 passed** с production build, typecheck и Biome.
+  Ruff, mypy (**115 source files**), dependency audit, Alembic upgrade/check,
+  tracked secret scan и `git diff --check` успешно; одно внешнее
+  Starlette/httpx deprecation-предупреждение.
+- company repositories не читались/клонировались; company target code и real
+  repository commands не выполнялись.
 
 ## Неподвижные границы
 

@@ -4018,6 +4018,54 @@ external writes. Briefing/Ask aggregation, human confirmation writes, RI-009
 L2 isolation and the first real portfolio run remain separately scoped and
 approval-gated.
 
+## DEC-126 - L2 Isolation Must Prove Every Hard Resource Bound Or Stay Disabled
+
+Decision (2026-08-03): RI-009 introduces one closed
+`hostile-synthetic-v1` verification profile and no real-repository executor.
+The public request accepts only a validated run ID plus the fixed synthetic
+profile marker. It cannot receive a repository path, arbitrary command,
+arguments, inherited environment, network destination or artifact selector.
+The strict `repository_l2_isolation_receipt.v1` can claim enabled only for
+hostile synthetic scope and permanently declares real-repository L2 disabled.
+The separate `repository_l2_isolation_status.v1` returns only
+verified/disabled state, controlled reason code and check count; it never
+returns host-tool, path, rlimit or probe-output detail.
+
+On macOS the candidate backend compiles a fixed repository-owned C probe with
+the trusted system compiler before entering the sandbox. The probe receives a
+minimal allowlisted environment and runs through `/usr/bin/sandbox-exec` with
+default deny, explicit network deny, read access only to system runtime paths
+and the synthetic source fixture, and write access only to a private ephemeral
+scratch directory. The parent closes inherited file descriptors, applies CPU,
+file-size, open-file and process rlimits, bounds combined output and wall time,
+terminates only its owned process group, checks scratch size and deletes the
+run directory on every exit.
+
+Hostile fixtures attempt source/outside writes, FounderOS filesystem reads,
+synthetic `.env`, database-socket and Docker-socket access, network access,
+output flooding, infinite sleep/CPU, oversized artifacts, process spawning and
+memory exhaustion. Receipts contain only check/status/count metadata; target output,
+paths and secret-shaped material are never returned. Any missing host tool,
+unsafe path, failed proof, malformed output or unsupported platform raises a
+sanitized unavailable/error result. There is no unisolated subprocess fallback.
+
+The current macOS 26.6 host exposes `RLIMIT_AS`, `RLIMIT_DATA` and `RLIMIT_RSS`
+but rejects attempts to lower all three with `EINVAL`. The backend also has no
+primitive for a hard aggregate scratch quota: `sandbox-exec` restricts where a
+process writes and `RLIMIT_FSIZE` restricts one file, but neither caps total
+bytes across many scratch files. Because RI-009 requires both hard RAM and disk
+bounds, self-tests fail before probe execution and no enabled receipt is issued.
+Filesystem/network/process/output/timeout controls are still regression-tested,
+but they do not override either missing hard resource proof. Real-repository L2
+therefore remains disabled for the first portfolio run. A future
+container/VM/service backend may enable it only after a new reviewed profile
+proves hard RAM, aggregate disk, CPU, process, output and wall-time containment
+on hostile synthetic fixtures and receives separate approval.
+
+RI-009 adds no migration, persistence, API, UI, provider read, LLM path,
+external action, company repository read/clone or target command execution.
+The next real portfolio run remains separately approval-gated and L0/L1-only.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

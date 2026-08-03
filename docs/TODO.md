@@ -6,11 +6,13 @@
 
 ## Сейчас — Repository Intelligence
 
-1. RI-001–RI-006 merged в `main` через PR #35 и PR #34. RI-007
-   portfolio/detail/history/graph read APIs и UI реализованы на synthetic
-   RI-006 data (DEC-124). RI-008 structured cross-source comparisons
-   реализованы на synthetic GitHub/Jira/document data (DEC-125). До отдельного
-   approval не начинать **RI-009** L2 isolation или real portfolio run.
+1. RI-001–RI-008 merged в `main` через PR #35, #34, #38 и #39. RI-009
+   hostile-synthetic L2 boundary реализован fail closed (DEC-126): macOS
+   sandbox блокирует filesystem/network/process escapes, но host не даёт
+   применить hard RAM rlimit, а backend не имеет hard aggregate scratch quota,
+   поэтому enabled receipt не выдаётся и real-repository L2 остаётся
+   выключенным. Следующий real portfolio run отдельно approval-gated и должен
+   быть L0/L1-only до нового approved isolation backend.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
@@ -42,6 +44,12 @@ RI-008 реализован 2026-08-03: strict versioned source-claim envelopes 
 GitHub issues/PRs, Jira tasks и opt-in internal documents exact-сравниваются с
 current RI facts; agreements, contradictions и insufficient evidence сохраняют
 обе evidence sides, unsupported/free-text/fuzzy claims fail closed (DEC-125).
+RI-009 реализован 2026-08-03 как closed hostile-synthetic proof:
+fixed probe, minimal env, read-only source, scratch-only writes, network deny и
+CPU/file/process/output/wall-time bounds проверяются без company repository
+access. Hard RAM и aggregate scratch bounds на текущем macOS backend
+доказать нельзя, поэтому self-test fail closed и real-repository L2 disabled
+(DEC-126).
 
 ## Сейчас — завершение FounderOS 2.0 reset
 
