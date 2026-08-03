@@ -6,13 +6,12 @@
 
 ## Сейчас — Repository Intelligence
 
-1. RI-001–RI-008 merged в `main` через PR #35, #34, #38 и #39. RI-009
-   hostile-synthetic L2 boundary реализован fail closed (DEC-126): macOS
-   sandbox блокирует filesystem/network/process escapes, но host не даёт
-   применить hard RAM rlimit, а backend не имеет hard aggregate scratch quota,
-   поэтому enabled receipt не выдаётся и real-repository L2 остаётся
-   выключенным. Следующий real portfolio run отдельно approval-gated и должен
-   быть L0/L1-only до нового approved isolation backend.
+1. RI-001–RI-009 merged в `main` через PR #35, #34, #38, #39 и #40.
+   Preparation-only L0/L1 portfolio dry-run boundary реализован (DEC-127): он
+   валидирует private exact-SHA manifest и выдаёт content-free receipt без
+   provider/repository read, job enqueue или persistence. Следующий шаг —
+   owner-private manifest validation; actual portfolio read всё ещё требует
+   нового explicit founder instruction. Real-repository L2 disabled.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
@@ -50,6 +49,10 @@ CPU/file/process/output/wall-time bounds проверяются без company r
 access. Hard RAM и aggregate scratch bounds на текущем macOS backend
 доказать нельзя, поэтому self-test fail closed и real-repository L2 disabled
 (DEC-126).
+Portfolio dry run подготовлен 2026-08-03: strict private manifest требует
+canonical identity, exact SHA и L0/L1-only; content-free receipt подтверждает
+zero provider/repository reads, jobs, persistence и writes, фиксируя будущие
+failure/restart/retention/rollback boundaries (DEC-127).
 
 ## Сейчас — завершение FounderOS 2.0 reset
 

@@ -36,6 +36,7 @@ Command Center documentation is not part of the active set.
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
 | How should FounderOS learn what every repository does and how repositories relate? | [`REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md`](REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md) |
 | How should Repository Intelligence be prepared and launched operationally? | [`REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md`](REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md) |
+| How do we validate the private L0/L1 portfolio manifest without starting a repository read? | [`deploy/repository-intelligence-portfolio-dry-run.md`](deploy/repository-intelligence-portfolio-dry-run.md) |
 | How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
 | How do we recover after loss of the FounderOS machine? | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) |
 | Where do secrets and runtime settings belong? | [`operations/secrets-and-environment.md`](operations/secrets-and-environment.md) |
@@ -55,6 +56,7 @@ Command Center documentation is not part of the active set.
   the single `.env.local` bootstrap boundary and the encrypted, UI-only
   provider credential lifecycle.
 - [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook through the managed `/settings/integrations/github` flow.
+- [`deploy/repository-intelligence-portfolio-dry-run.md`](deploy/repository-intelligence-portfolio-dry-run.md) - preparation-only validation for a private exact-SHA L0/L1 manifest; performs zero provider/repository reads and leaves L2 disabled.
 - [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.
 - `make local-readiness` is the sanitized repository-evidence report;
   `make release-handoff` and `scripts/private_beta_release_handoff.py` remain

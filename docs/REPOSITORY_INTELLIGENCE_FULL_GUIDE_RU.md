@@ -1354,20 +1354,37 @@ Receipt не содержит:
 
 ## 18. Portfolio manifest
 
-Пример:
+Перед любым provider/repository read сначала выполнить preparation-only dry run
+по [`deploy/repository-intelligence-portfolio-dry-run.md`](deploy/repository-intelligence-portfolio-dry-run.md).
+Он требует private owner-owned `0600` manifest, exact SHA и L0/L1-only, но не
+открывает target paths и не запускает jobs. Успешный receipt всё равно требует
+нового explicit founder instruction для реального запуска.
+
+Пример private run manifest:
 
 ```json
 {
-  "schema_version": "repository-portfolio.v1",
+  "schema_version": "repository_portfolio_dry_run.v1",
   "workspace_id": "<uuid>",
+  "l2_enabled": false,
+  "provider_calls_authorized": false,
+  "target_reads_authorized": false,
+  "target_execution_authorized": false,
+  "persistence_authorized": false,
   "repositories": [
     {
       "repository_id": "<canonical-uuid>",
       "provider": "github",
       "external_id": "<stable-provider-id>",
       "full_name": "owner/repo",
-      "local_path": "/path/to/repository",
+      "commit_algorithm": "sha1",
+      "commit_sha": "<40-lowercase-hex>",
       "audit_levels": ["L0", "L1"],
+      "profile": "repository-static-v1",
+      "policy_hash": "<64-lowercase-hex>",
+      "engine_version": "ri-engine-1.0.0",
+      "source_mode": "provider_exact_sha",
+      "local_mirror_ref": null,
       "enabled": true
     }
   ]
@@ -1378,6 +1395,8 @@ Manifest:
 
 - не содержит credentials;
 - не коммитится в target repositories;
+- хранится вне FounderOS repo как owner-owned regular file mode `0600`;
+- не содержит absolute target paths; local mirror — только opaque relative ref;
 - подтверждается человеком;
 - хранится в private central workspace;
 - использует stable provider identity;
@@ -1705,7 +1724,10 @@ starting the run.
 - [x] зафиксировать DEC-125;
 - [x] реализовать RI-009 hostile-synthetic proof после отдельного approval;
 - [x] зафиксировать DEC-126 и fail-closed real-repository L2;
-- [ ] подготовить отдельно approved L0/L1-only real portfolio run.
+- [x] реализовать preparation-only private-manifest dry-run boundary;
+- [x] зафиксировать DEC-127;
+- [ ] создать owner-private exact-SHA manifest и получить content-free receipt;
+- [ ] получить новое explicit approval на actual L0/L1 portfolio read.
 
 ### Во время подготовки
 
