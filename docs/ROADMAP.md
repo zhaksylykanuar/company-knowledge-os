@@ -33,11 +33,13 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - GitHub provider reads выполняются через durable PostgreSQL jobs с
   lease/retry/resume/progress/cancel, bounded workers, shared HTTP pool и
   короткими repository-scoped транзакциями;
-- Repository Intelligence RI-001–RI-006 реализован на synthetic data:
+- Repository Intelligence RI-001–RI-007 реализован на synthetic data:
   strict contracts, canonical L0, exact-SHA checkout, bounded static
   collectors, directional graph candidates и durable
   jobs/runs/facts/relationships/findings/contradictions с complete-only
-  reconciliation. RI-007 UI и реальный portfolio run остаются approval-gated;
+  reconciliation, плюс bounded portfolio/detail/history/graph read APIs и
+  Company UI. RI-008 cross-source intelligence и реальный portfolio run
+  остаются отдельно approval-gated;
 - локальный rollback дополнен AES-256-GCM off-device export, проверкой после
   шифрования, full restore drill и explicit 7/4/12 retention; первый реальный
   независимый export/drill остаётся owner-operated gate;

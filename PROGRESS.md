@@ -28,8 +28,12 @@ directional evidence-backed relationship candidates и bounded graph validation
 только из synthetic RI-004 outputs. RI-006 добавляет durable jobs/runs/facts/
 relationships/findings/contradictions, canonical evidence links,
 complete-coverage reconciliation и явный retention/deletion contract на
-synthetic PostgreSQL data. Parent PR #35 и RI-006 PR #34 merged в `main`
-2026-08-02; target code не выполнялся, company repositories не читались.**
+synthetic PostgreSQL data. RI-007 добавляет bounded workspace-scoped
+portfolio/detail/history/graph read APIs и Company UI с фильтрами,
+progressive disclosure и evidence drawer только поверх RI-006. Parent PR #35
+и RI-006 PR #34 merged в `main` 2026-08-02; RI-007 реализован на отдельной
+branch 2026-08-03. Target code не выполнялся, company repositories не
+читались.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -101,6 +105,16 @@ ledger; тексты источников и evidence не копируются.
   хранятся только как raw-storage refs на 30 дней, checkout удаляется на exit,
   canonical rows живут до явного repository/workspace deletion. Downgrade
   блокируется при непустых RI tables (DEC-120).
+- Реализован RI-007 read/UI slice без migration, provider/company repository
+  read, target execution, LLM и external action. Bounded API проецирует
+  portfolio, repository detail, audit history и current directional graph
+  только из workspace-scoped RI-006 + canonical Repository/EvidenceRef rows.
+  Raw source bodies, evidence quotes, SourceRecord payloads и artifact storage
+  refs не возвращаются. Company UI различает observed/inferred/human-confirmed
+  и unresolved candidate states, показывает purpose, responsibilities,
+  interfaces, dependencies, findings, contradictions, unknowns, audit
+  freshness/history и evidence drawer; фильтры работают локально по уже
+  загруженному портфелю (DEC-124).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -399,8 +413,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Дождаться отдельного approval на RI-007 portfolio/detail UI и read APIs;
-   до этого не добавлять product UI поверх RI-006 tables.
+1. Review/merge RI-007 branch; после этого не начинать RI-008 cross-source
+   intelligence без отдельного approval.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -452,7 +466,23 @@ Security follow-up (2026-08-03):
   `make backend-check` — **899 passed**; `make frontend-check` —
   **326 passed** с production build, typecheck и lint. Ruff, mypy,
   dependency audit, Alembic и tracked secret scan также прошли.
-- RI-007 не начат и остаётся отдельно approval-gated.
+
+RI-007 implementation/verification (2026-08-03):
+
+- bounded workspace-scoped portfolio/detail/history/graph APIs и Company UI
+  реализованы только поверх synthetic RI-006 PostgreSQL rows (DEC-124).
+- focused backend read API suite — **2 passed**; frontend tests —
+  **333 passed**; guarded `make backend-check` — **901 passed**; full
+  `make frontend-check` — **333 passed** с production build, typecheck и
+  Biome. Ruff, mypy (**113 source files**), dependency audit, Alembic и
+  tracked secret scan также прошли.
+- authenticated same-origin runtime smoke через Next proxy подтвердил login,
+  workspace session, portfolio/detail/history/graph `200`, security headers и
+  отсутствие secret/artifact/source-body material. Visual desktop/mobile
+  browser inspection не выполнен: доступные browser-control sessions отсутствовали.
+- company repositories/provider content не читались, target code не
+  выполнялся, migration/LLM/external action не добавлены.
+- RI-008 не начат и остаётся separately approval-gated.
 
 ## Неподвижные границы
 

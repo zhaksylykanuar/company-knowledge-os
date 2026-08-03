@@ -1,6 +1,7 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: RI-001–RI-006 реализованы; следующий approval-gated этап — RI-007
+Статус: RI-001–RI-007 реализованы на synthetic data; следующий
+approval-gated этап — RI-008
 Дата подготовки: 2026-07-31
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
@@ -1099,7 +1100,9 @@ edges, строит inverse views и bounded cycle/orphan findings. Name similar
 
 ### RI-007 — Read models and UI
 
-Создать:
+Статус: **реализован 2026-08-03** (DEC-124).
+
+Реализовано:
 
 - Repository Portfolio;
 - Repository Detail;
@@ -1110,7 +1113,8 @@ edges, строит inverse views и bounded cycle/orphan findings. Name similar
 - freshness;
 - filters.
 
-Пока только synthetic data.
+Только synthetic RI-006 data. API не возвращает raw source bodies,
+EvidenceRef quotes, SourceRecord payloads или artifact storage refs.
 
 ### RI-008 — Cross-source intelligence
 
@@ -1639,15 +1643,13 @@ npm run build
 ## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-007 — Repository Intelligence portfolio/detail read APIs and UI.
+Goal: Implement RI-008 — cross-source Repository Intelligence.
 
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-007 after separate approval; RI-006 is already merged.
-- Read only workspace-scoped RI-006 persistence.
-- Progressive disclosure, evidence drawer, unknowns and observed/inferred
-  distinction.
+- Only RI-008 after separate approval; RI-007 is implemented.
+- Preserve competing claims and strict canonical evidence.
 - No company repository read, portfolio provider run, migration, external
   action or LLM mutation.
 - Do not touch .env.local, .local, credentials, company data or existing connections.
@@ -1655,16 +1657,14 @@ Constraints:
 - Nothing may be pushed.
 
 Done when:
-- Repository Portfolio, Repository Detail, audit history, directional graph and
-  evidence states have bounded read APIs and UI.
-- Focused backend/UI tests, typecheck, lint, build and browser/accessibility
-  checks pass.
+- Bounded synthetic GitHub/Jira/document contradiction fixtures and
+  unsupported-claim rejection pass.
 - git diff --check passes.
 - Staged and tracked secret scans pass.
 - uv run ruff check . passes.
 - Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-007 commit is created.
-- Report the result and wait for approval before RI-008.
+- A scoped local RI-008 commit is created.
+- Report the result and wait for approval before RI-009/real portfolio run.
 ```
 
 ## 27. Краткий финальный checklist
@@ -1686,7 +1686,9 @@ Done when:
 - [x] зафиксировать DEC-119;
 - [x] реализовать RI-006 только на synthetic PostgreSQL data;
 - [x] зафиксировать DEC-120;
-- [ ] после review/merge начать RI-007 только после отдельного approval.
+- [x] реализовать RI-007 только после отдельного approval;
+- [x] зафиксировать DEC-124;
+- [ ] после review/merge начать RI-008 только после отдельного approval.
 
 ### Во время подготовки
 
