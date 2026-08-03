@@ -3984,6 +3984,40 @@ target execution, LLM call, external action or human-resolution write. The
 separate first real portfolio run and RI-008 cross-source intelligence remain
 approval-gated.
 
+## DEC-125 - Cross-source Repository Claims Are Strict And Compared At Read Time
+
+Decision (2026-08-03): RI-008 introduces versioned
+`repository_cross_source_claim_set.v1` and
+`repository_cross_source_claim.v1` envelopes. A claim identifies one exact
+canonical repository by workspace-scoped UUID and `owner/repository`, one
+current RI fact by controlled `fact_type` + stable `claim_id`, one allowlisted
+field (`repository_type` or `claim_type`), an expected controlled value,
+confidence and a bounded summary. One envelope targets only one repository.
+
+Structured claim sets may be carried in sanitized canonical GitHub issue/PR or
+Jira task metadata under `repository_intelligence_claims`. Internal documents
+participate only when explicitly tagged `repository-intelligence`, and their
+entire authored markdown must be the strict JSON claim-set envelope. Ordinary
+free text, titles, excerpts, fuzzy names, embeddings and shared terminology
+never create a claim or contradiction.
+
+RI-008 compares claims at read time with current RI-006 facts and returns
+`agreement`, `contradiction` or `insufficient_evidence`, preserving the exact
+source evidence and existing repository evidence. Foreign/mixed identities,
+duplicates, unknown fields, non-finite confidence, unsupported fact/field
+pairs, malformed JSON and oversized claim sets fail closed with bounded
+rejection receipts. Outputs are capped at 200 sources/comparisons, 20 claims
+per source and 20 repository evidence refs per fact.
+
+No migration or new durable contradiction table is added: the existing
+`RepositoryContradiction` lifecycle remains run/reconciliation-scoped, while
+cross-source comparisons are derived from current canonical rows. RI-008 does
+not create or duplicate GitHub/Jira tasks, persist human confirmations, call a
+provider/LLM, read company repositories, execute target code or perform
+external writes. Briefing/Ask aggregation, human confirmation writes, RI-009
+L2 isolation and the first real portfolio run remain separately scoped and
+approval-gated.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

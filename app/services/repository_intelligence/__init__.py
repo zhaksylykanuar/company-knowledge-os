@@ -18,6 +18,11 @@ from app.services.repository_intelligence.collectors import (
     collect_repository_static_facts,
     validate_repository_static_collection_json,
 )
+from app.services.repository_intelligence.cross_source import (
+    RepositoryCrossSourceClaimSetV1,
+    RepositoryCrossSourceClaimV1,
+    build_repository_cross_source_comparisons,
+)
 from app.services.repository_intelligence.l0 import (
     build_workspace_repository_intelligence_l0,
 )
@@ -58,6 +63,8 @@ __all__ = [
     "RepositoryArtifactDeletionReceipt",
     "RepositoryArtifactManifestItemV1",
     "RepositoryCoverageV1",
+    "RepositoryCrossSourceClaimSetV1",
+    "RepositoryCrossSourceClaimV1",
     "RepositoryIntelligenceDeletionResult",
     "RepositoryPortfolioEntryV1",
     "RepositoryPortfolioV1",
@@ -68,6 +75,7 @@ __all__ = [
     "RepositoryStaticCollectorPolicy",
     "RepositoryStaticFactV1",
     "build_workspace_repository_intelligence_l0",
+    "build_repository_cross_source_comparisons",
     "build_repository_relationship_analysis",
     "collect_repository_static_facts",
     "claim_repository_analysis_job",

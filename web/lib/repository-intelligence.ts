@@ -186,6 +186,71 @@ export type RepositoryConfirmation = {
   evidence: RepositoryEvidence[];
 };
 
+export type RepositoryCrossSourceSource = {
+  source_type: "task" | "pull_request" | "document";
+  provider: "github" | "jira" | "internal";
+  record_id: string;
+  ref: string;
+  url: string | null;
+  observed_at: string | null;
+};
+
+export type RepositoryCrossSourceComparison = {
+  id: string;
+  status: "agreement" | "contradiction" | "insufficient_evidence";
+  summary: string;
+  source: RepositoryCrossSourceSource;
+  source_claim: {
+    fact_type: string;
+    claim_id: string;
+    field: string;
+    expected_value: string;
+    summary: string;
+    confidence: number;
+  };
+  repository_fact: {
+    id: string;
+    fact_type: string;
+    claim_id: string;
+    field: string;
+    actual_value: string;
+    claim_status: string;
+    confidence: number;
+    human_resolution_status: "pending" | "confirmed" | "rejected";
+  } | null;
+  source_evidence: RepositoryEvidence[];
+  repository_evidence: RepositoryEvidence[];
+};
+
+export type RepositoryCrossSourceRead = {
+  summary: {
+    sources_considered: number;
+    comparisons: number;
+    agreements: number;
+    contradictions: number;
+    insufficient_evidence: number;
+    rejected_claim_sets: number;
+  };
+  comparisons: RepositoryCrossSourceComparison[];
+  rejected_claim_sets: {
+    source: RepositoryCrossSourceSource;
+    error_code: string;
+  }[];
+  truncated: {
+    sources: boolean;
+    comparisons: boolean;
+    rejected_claim_sets: boolean;
+  };
+  contract: {
+    claim_set_schema: "repository_cross_source_claim_set.v1";
+    claim_schema: "repository_cross_source_claim.v1";
+    exact_repository_identity_required: true;
+    free_text_inference: false;
+    fuzzy_matching: false;
+    persistence_write: false;
+  };
+};
+
 export type RepositoryDetailResponse = {
   workspace_id: string;
   mode: "repository_intelligence_read_only";
@@ -197,6 +262,7 @@ export type RepositoryDetailResponse = {
   relationships: RepositoryRelationship[];
   findings: RepositoryFinding[];
   contradictions: RepositoryContradiction[];
+  cross_source: RepositoryCrossSourceRead;
   unknowns: RepositoryFact[];
   confirmation_queue: RepositoryConfirmation[];
   limitations: string[];

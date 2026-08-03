@@ -28,6 +28,9 @@ from app.db.canonical_models import (
     Task,
 )
 from app.db.integration_models import INTEGRATION_PROVIDER_JIRA, IntegrationConnection
+from app.services.repository_intelligence.cross_source import (
+    CROSS_SOURCE_METADATA_KEY,
+)
 
 JIRA_SOURCE_RECORD_TYPE_ISSUE = "issue"
 JIRA_IMPORT_SOURCE = "local_json_import"
@@ -218,6 +221,7 @@ async def import_jira_issues_local(
 
 def build_normalized_jira_issue(record: Mapping[str, Any]) -> dict[str, Any]:
     fields = _mapping(record.get("fields"))
+    raw_metadata = _mapping(record.get("metadata"))
     key = _jira_key(
         record.get("key")
         or record.get("issue_key")
@@ -251,6 +255,23 @@ def build_normalized_jira_issue(record: Mapping[str, Any]) -> dict[str, Any]:
     issue_type = _issue_type_name(record.get("issue_type") or fields.get("issuetype"))
     evidence_refs = _safe_evidence_refs(record.get("evidence_refs"), key=key, source_url=source_url)
 
+    metadata = {
+        "jira_object_type": "issue",
+        "key": key,
+        "project_key": project_key,
+        "issue_type": issue_type,
+        "status_category": status_category,
+        "import_source": JIRA_IMPORT_SOURCE,
+        "provider_sync_started": False,
+        "external_write_performed": False,
+        "llm_used": False,
+        "evidence_refs": evidence_refs,
+    }
+    if CROSS_SOURCE_METADATA_KEY in raw_metadata:
+        metadata[CROSS_SOURCE_METADATA_KEY] = raw_metadata.get(
+            CROSS_SOURCE_METADATA_KEY
+        )
+
     normalized = {
         "entity_type": "task",
         "provider": INTEGRATION_PROVIDER_JIRA,
@@ -268,20 +289,7 @@ def build_normalized_jira_issue(record: Mapping[str, Any]) -> dict[str, Any]:
         "project_key": project_key,
         "issue_type": issue_type,
         "evidence_refs": evidence_refs,
-        "metadata": _sanitize_payload(
-            {
-                "jira_object_type": "issue",
-                "key": key,
-                "project_key": project_key,
-                "issue_type": issue_type,
-                "status_category": status_category,
-                "import_source": JIRA_IMPORT_SOURCE,
-                "provider_sync_started": False,
-                "external_write_performed": False,
-                "llm_used": False,
-                "evidence_refs": evidence_refs,
-            }
-        ),
+        "metadata": _sanitize_payload(metadata),
     }
     return _sanitize_payload(normalized)
 

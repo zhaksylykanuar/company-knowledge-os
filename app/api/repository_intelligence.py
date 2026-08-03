@@ -224,6 +224,106 @@ class RepositoryConfirmationRead(_ReadModel):
     evidence: list[RepositoryEvidenceRead] = Field(default_factory=list)
 
 
+class RepositoryCrossSourceReadSource(_ReadModel):
+    source_type: Literal["task", "pull_request", "document"]
+    provider: Literal["github", "jira", "internal"]
+    record_id: UUID
+    ref: str
+    url: str | None = None
+    observed_at: datetime | None = None
+
+
+class RepositoryCrossSourceClaimRead(_ReadModel):
+    fact_type: str
+    claim_id: str
+    field: str
+    expected_value: str
+    summary: str
+    confidence: float
+
+
+class RepositoryCrossSourceFactRead(_ReadModel):
+    id: UUID
+    fact_type: str
+    claim_id: str
+    field: str
+    actual_value: str
+    claim_status: str
+    confidence: float
+    human_resolution_status: Literal["pending", "confirmed", "rejected"]
+
+
+class RepositoryCrossSourceEvidenceRead(_ReadModel):
+    id: UUID
+    role: Literal["supporting", "contradicting"]
+    kind: str
+    source: str
+    ref: str | None = None
+    record_id: UUID
+    url: str | None = None
+    confidence: float
+
+
+class RepositoryCrossSourceComparisonRead(_ReadModel):
+    id: str
+    status: Literal[
+        "agreement",
+        "contradiction",
+        "insufficient_evidence",
+    ]
+    summary: str
+    source: RepositoryCrossSourceReadSource
+    source_claim: RepositoryCrossSourceClaimRead
+    repository_fact: RepositoryCrossSourceFactRead | None = None
+    source_evidence: list[RepositoryCrossSourceEvidenceRead] = Field(
+        default_factory=list
+    )
+    repository_evidence: list[RepositoryEvidenceRead] = Field(
+        default_factory=list
+    )
+
+
+class RepositoryCrossSourceRejectedRead(_ReadModel):
+    source: RepositoryCrossSourceReadSource
+    error_code: str
+
+
+class RepositoryCrossSourceSummaryRead(_ReadModel):
+    sources_considered: int
+    comparisons: int
+    agreements: int
+    contradictions: int
+    insufficient_evidence: int
+    rejected_claim_sets: int
+
+
+class RepositoryCrossSourceTruncatedRead(_ReadModel):
+    sources: bool
+    comparisons: bool
+    rejected_claim_sets: bool
+
+
+class RepositoryCrossSourceContractRead(_ReadModel):
+    claim_set_schema: Literal["repository_cross_source_claim_set.v1"]
+    claim_schema: Literal["repository_cross_source_claim.v1"]
+    exact_repository_identity_required: Literal[True]
+    free_text_inference: Literal[False]
+    fuzzy_matching: Literal[False]
+    persistence_write: Literal[False]
+
+
+class RepositoryCrossSourceRead(_ReadModel):
+    summary: RepositoryCrossSourceSummaryRead
+    comparisons: list[RepositoryCrossSourceComparisonRead] = Field(
+        default_factory=list
+    )
+    rejected_claim_sets: list[RepositoryCrossSourceRejectedRead] = Field(
+        default_factory=list
+    )
+    truncated: RepositoryCrossSourceTruncatedRead
+    contract: RepositoryCrossSourceContractRead
+
+
 class RepositoryDetailTruncatedRead(_ReadModel):
     facts: bool
     relationships: bool
@@ -245,6 +345,7 @@ class RepositoryDetailResponse(_ReadModel):
     relationships: list[RepositoryRelationshipRead] = Field(default_factory=list)
     findings: list[RepositoryFindingRead] = Field(default_factory=list)
     contradictions: list[RepositoryContradictionRead] = Field(default_factory=list)
+    cross_source: RepositoryCrossSourceRead
     unknowns: list[RepositoryFactRead] = Field(default_factory=list)
     confirmation_queue: list[RepositoryConfirmationRead] = Field(
         default_factory=list

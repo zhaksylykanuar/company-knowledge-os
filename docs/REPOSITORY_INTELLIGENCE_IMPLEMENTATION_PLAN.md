@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001–RI-007 implemented on synthetic data; RI-008 is approval-gated
+Status: RI-001–RI-008 implemented on synthetic data; RI-009 is approval-gated
 Prepared: 2026-07-31
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
@@ -18,7 +18,9 @@ contradictions, canonical evidence links and complete-only reconciliation are
 implemented under DEC-120 and migration `11c7b724c929`. Bounded
 portfolio/detail/history/graph read APIs and Company UI are implemented under
 DEC-124 using only RI-006 synthetic data. No provider portfolio read, target
-execution or LLM path exists. Preparation status remains `preparing`.
+execution or LLM path exists. Strict exact-identity GitHub/Jira/document
+cross-source comparisons are implemented under DEC-125. Preparation status
+remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1529,6 +1531,9 @@ Done when: UI tests, typecheck, lint, build, browser/accessibility checks pass.
 
 ### RI-008 — Cross-source contradictions
 
+Status: implemented and verified on bounded synthetic GitHub issue/PR, Jira
+task and opt-in internal-document claims (DEC-125).
+
 ```text
 Goal: Compare repository intelligence with GitHub work, Jira, and documents.
 Context: Canonical evidence-backed company memory.
@@ -1594,9 +1599,8 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-008 — cross-source contradictions**, but only after
-separate approval and RI-007 review/merge. RI-007 reads only the workspace-scoped
-RI-006 persistence boundary; do not start a provider portfolio run.
+Recommended next task: **RI-009 — L2 isolation**, but only after separate
+approval and RI-008 review/merge. Do not start a provider portfolio run.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1604,14 +1608,13 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-008 cross-source Repository Intelligence.
+Goal: Implement RI-009 isolated L2 verification.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Preserve competing claims and strict evidence; no company
-repository read, provider portfolio run, external action or LLM mutation.
-Preserve unrelated working-tree changes.
-Done when: Bounded synthetic GitHub/Jira/document contradiction fixtures and
-unsupported-claim rejection pass with focused/full gates.
+Constraints: No host execution, FounderOS secrets/database/sockets, Docker
+socket or default network; no company repository read. Preserve unrelated work.
+Done when: Hostile synthetic escape/resource/timeout/sanitization fixtures pass
+and real-repository L2 remains disabled.
 ```

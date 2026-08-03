@@ -8,8 +8,9 @@
 
 1. RI-001–RI-006 merged в `main` через PR #35 и PR #34. RI-007
    portfolio/detail/history/graph read APIs и UI реализованы на synthetic
-   RI-006 data (DEC-124). До отдельного approval не начинать **RI-008**
-   cross-source intelligence.
+   RI-006 data (DEC-124). RI-008 structured cross-source comparisons
+   реализованы на synthetic GitHub/Jira/document data (DEC-125). До отдельного
+   approval не начинать **RI-009** L2 isolation или real portfolio run.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
@@ -37,6 +38,10 @@ RI-007 реализован 2026-08-03: bounded workspace-scoped read APIs, Repo
 Portfolio/Detail, directional graph, evidence drawer, unknown/confirmation
 queue, audit history/freshness и local filters работают только поверх RI-006
 PostgreSQL rows; raw source bodies и artifact paths не возвращаются (DEC-124).
+RI-008 реализован 2026-08-03: strict versioned source-claim envelopes из
+GitHub issues/PRs, Jira tasks и opt-in internal documents exact-сравниваются с
+current RI facts; agreements, contradictions и insufficient evidence сохраняют
+обе evidence sides, unsupported/free-text/fuzzy claims fail closed (DEC-125).
 
 ## Сейчас — завершение FounderOS 2.0 reset
 
@@ -67,7 +72,9 @@ PostgreSQL rows; raw source bodies и artifact paths не возвращаютс
    чего подключить их к `source-reconciliation.v1`. Текущие локальные импорты
    не имеют права объявлять исчезновение.
 2. Добавить обязательства клиентов, решения и риски с evidence.
-3. Добавить contradiction detection между источниками.
+3. Расширять contradiction detection новыми source claim adapters только
+   через strict versioned contracts; базовый GitHub/Jira/document RI-008 slice
+   реализован (DEC-125).
 4. Расширить Memory Control v1 с внутренних документов на provider-backed
    canonical records: exact dependency preview, evidence-safe cascade,
    reconciliation/reimport behavior и честная provider-side deletion boundary.

@@ -30,10 +30,12 @@ relationships/findings/contradictions, canonical evidence links,
 complete-coverage reconciliation и явный retention/deletion contract на
 synthetic PostgreSQL data. RI-007 добавляет bounded workspace-scoped
 portfolio/detail/history/graph read APIs и Company UI с фильтрами,
-progressive disclosure и evidence drawer только поверх RI-006. Parent PR #35
-и RI-006 PR #34 merged в `main` 2026-08-02; RI-007 реализован на отдельной
-branch 2026-08-03. Target code не выполнялся, company repositories не
-читались.**
+progressive disclosure и evidence drawer только поверх RI-006. RI-008
+добавляет strict structured cross-source claims и bounded read-time comparison
+с canonical GitHub issues/PRs, Jira tasks и opt-in internal documents. Parent
+PR #35 и RI-006 PR #34 merged в `main` 2026-08-02; RI-007 merged через PR #38,
+RI-008 реализован на отдельной branch 2026-08-03. Target code не выполнялся,
+company repositories не читались.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -115,6 +117,16 @@ ledger; тексты источников и evidence не копируются.
   interfaces, dependencies, findings, contradictions, unknowns, audit
   freshness/history и evidence drawer; фильтры работают локально по уже
   загруженному портфелю (DEC-124).
+- Реализован RI-008 cross-source contradiction slice без migration,
+  provider/company repository read, target execution, LLM и external action.
+  Versioned `repository_cross_source_claim_set.v1` принимает только bounded
+  exact repository/fact/field assertions из sanitized GitHub issue/PR и Jira
+  metadata либо opt-in internal documents. Read-time projection сравнивает их
+  с current RI-006 facts и возвращает agreement, contradiction или
+  insufficient_evidence с обеими evidence sides. Unknown fields, mixed/foreign
+  repository identities, duplicate claims, malformed/oversized JSON, unsupported
+  fact-field pairs и free-text/fuzzy inputs fail closed; никаких follow-up
+  tasks и human confirmations не создаётся (DEC-125).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -413,8 +425,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Review/merge RI-007 branch; после этого не начинать RI-008 cross-source
-   intelligence без отдельного approval.
+1. Review/merge RI-008 branch; после этого не начинать RI-009 L2 isolation или
+   первый реальный portfolio run без отдельного approval.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -482,7 +494,25 @@ RI-007 implementation/verification (2026-08-03):
   browser inspection не выполнен: доступные browser-control sessions отсутствовали.
 - company repositories/provider content не читались, target code не
   выполнялся, migration/LLM/external action не добавлены.
-- RI-008 не начат и остаётся separately approval-gated.
+
+RI-008 implementation/verification (2026-08-03):
+
+- strict structured GitHub issue/PR, Jira и opt-in document claim contract,
+  bounded read-time comparison и Company detail cross-source section
+  реализованы на synthetic canonical/RI-006 data (DEC-125).
+- focused contract/integration suite — **19 passed**; frontend tests —
+  **333 passed**; guarded `make backend-check` — **915 passed**; full
+  `make frontend-check` — **333 passed** с production build, typecheck и
+  Biome. Ruff, mypy (**114 source files**), dependency audit, Alembic и
+  tracked secret scan также прошли.
+- exact source/fact identity обязателен; free text, fuzzy matching, unsupported
+  conclusions и foreign workspace/repository claims не создают contradiction.
+- no duplicate task/action, migration, provider/LLM call или write path
+  добавлен. RI-009 и real portfolio run не начаты.
+- authenticated same-origin runtime smoke подтвердил exact GitHub/Jira/PR/
+  document comparisons, session auth, security headers и отсутствие raw claim
+  envelopes/source bodies/artifact paths. Visual desktop/mobile browser
+  inspection не выполнен: browser-control sessions отсутствовали.
 
 ## Неподвижные границы
 

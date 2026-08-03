@@ -306,6 +306,22 @@
   color: var(--muted);
 }
 
+.crossSourceContradiction {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.nestedDisclosure {
+  border-left: 3px solid var(--border);
+  margin-top: 12px;
+  padding-left: 12px;
+}
+
+.nestedDisclosure > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .evidenceButtons {
   display: flex;
   flex-wrap: wrap;
